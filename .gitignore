@@ -16,3 +16,6 @@ __pycache__/
 /dist/
 *.zip
 /实验三_软件实现与构建.pdf
+
+# Uploaded product images are runtime data, served only through guarded routes
+/code/uploads/

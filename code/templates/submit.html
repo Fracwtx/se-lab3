@@ -1,11 +1,24 @@
 {% extends 'base.html' %}{% block content %}{% set fields = request.form if request.method == 'POST' else values|default({}) %}
 <h1>{{ "编辑商品" if editing else "提交商品" }}</h1><p>提交后进入待审核状态，审核通过后才会公开展示。</p>
-<form method="post" class="panel">
+<form method="post" class="panel" enctype="multipart/form-data">
+{% set saved = values|default({}) %}
 <label>标题<input name="title" required maxlength="100" value="{{ fields.get('title', '') }}"></label>
 <label>描述<textarea name="description" required maxlength="2000" rows="6">{{ fields.get('description', '') }}</textarea></label>
 <label>分类<input name="category" maxlength="50" value="{{ fields.get('category', '其他') }}" list="categories"></label>
 <datalist id="categories"><option value="图书教材"><option value="数码电子"><option value="生活用品"><option value="其他"></datalist>
+<label>交付地点<input name="delivery_location" required maxlength="200" value="{{ fields.get('delivery_location', '') }}"></label>
 <label>价格（元）<input name="price" type="number" required min="0.01" max="100000" step="0.01" value="{{ fields.get('price', '') }}"></label>
+<fieldset><legend>商品实物图与封面</legend>
+<p>送审须有1–5张实物图，草稿可暂缺。支持JPEG、PNG、WebP，每张最多5 MiB。</p>
+{% for name in saved.get('images', []) %}<div class="image-option">
+<img src="{{ url_for('product_image', product_id=saved.id, filename=name) }}" alt="已有实物图 {{ loop.index }}">
+<label>原图 {{ loop.index }} <input type="checkbox" name="remove_images" value="{{ name }}">移除此图</label>
+{% if name == saved.get('cover') %}<span>当前封面</span>{% endif %}</div>{% endfor %}
+<label>上传新图片<input name="images" type="file" multiple accept="image/jpeg,image/png,image/webp"></label>
+<label>封面序号<input name="cover_position" type="number" min="1" max="5" value="{{ request.form.get('cover_position', '') }}"></label>
+<p>按保留图片在前、新上传图片按选择顺序在后编号。不填则保留当前封面；没有时使用首张。移除图片后按剩余顺序重新编号。</p>
+<p>校验失败后请重新选择本次新上传的图片；已保存的图片会保留。</p>
+</fieldset>
 {% if not published %}<button class="btn secondary" name="action" value="save" formnovalidate>{{ "保存修改（保持下架）" if off_shelf else "保存草稿" }}</button>{% endif %}
 {% if editing %}
 <button class="btn primary" name="action" value="resubmit">再次送审</button>

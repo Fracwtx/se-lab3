@@ -13,7 +13,7 @@ python3 -m venv .venv
 .venv/bin/python code/app.py
 ```
 
-本轮已在独立 Python 3.12 虚拟环境实际安装 requirements.txt，pip check 无冲突。
+本轮已在独立 Python 3.13 虚拟环境实际安装 requirements.txt（含 Pillow 12.0.0），pip check 无冲突。已有环境也须重新安装依赖。
 在同一提交根目录执行测试和检查：
 
 ```bash
@@ -49,7 +49,7 @@ PYLINTHOME=/tmp/se-lab3-pylint .venv/bin/python -m pylint code/*.py
 账号写入与已有业务数据共用 data.json，在同一 transaction 内查重并保存，因此并发注册同名最多成功一次。
 注册请求中的 role 被忽略，新增账号固定为普通用户；只有预置 admin 具有管理员身份。
 使用 Werkzeug generate_password_hash/check_password_hash，JSON 仅存 password_hash，不存明文密码。
-联系方式只保存，不在公开商品列表或详情展示；当前没有扩展联系方式的交易参与者展示功能。
+联系方式不在公开商品列表或详情展示。在“我的交易”中，仅对应买卖双方可在待卖家确认、已确认、已完成状态查看对方联系方式；取消、拒绝、超时后不再展示。直接联系方式请求也检查当前身份和状态，并禁止缓存。演示账号或旧数据缺少联系方式显示“未填写”。管理员尚无交易处置功能，因此不开放管理员查看联系方式。
 旧 JSON 没有 users 字段时默认空列表，演示账号仍可登录；新账号直接从 JSON 读取，重启后可继续登录。
 
 演示：退出当前账号 → 登录页点“注册普通用户” → 填写四项（例如 campus_student / student123）→ 注册后在登录页登录 → “我的商品”可用，“商品审核”返回403。昵称和联系方式请使用演示值。
@@ -71,17 +71,19 @@ PYLINTHOME=/tmp/se-lab3-pylint .venv/bin/python -m pylint code/*.py
 
 ## 本地演示步骤
 
-1. 启动上面的 app.py 命令，以 user 登录并提交完整商品；退出后用 admin 审核通过。
+1. 启动上面的 app.py 命令，以 user 登录，新建商品填写标题、描述、分类、价格、交付地点，上传1–5张JPEG/PNG/WebP实物图。草稿可不完整；送审须完整。可填封面序号（从1开始）；不填默认第一张。退出后用 admin 审核通过，公开列表显示封面，详情显示地点及全部图片。
 2. user 进入“我的商品”，点击“普通下架”。确认状态为“已下架”，公开搜索查不到，原公开详情链接返回404。
 3. 点击该商品的“编辑 / 重新送审”。可以“保存修改（保持下架）”；点“再次送审”后进入待审核，不能直接恢复发布。
 4. admin 再次审核通过；公开列表和详情恢复，审核历史显示两次通过记录。其他普通用户和管理员不能代卖家普通下架。
-5. buyer 预约后，卖家下架请求会被拒绝；待确认和已确认预约都属于有效预约。
+5. buyer 预约后，卖家下架请求会被拒绝；待确认和已确认预约都属于有效预约。卖家确认、买家完成交易。要演示真实联系方式，请先注册两个使用虚构联系方式的账号分别买卖，在“我的交易”核对显示的对方信息；other 及匿名访问不得查看。
 6. 准备至少21件审核通过的商品，访问公开列表，按价格或发布时间排序后使用“上一页 / 下一页”。添加关键词、分类和价格范围，检查翻页后表单条件保持不变。
 7. 无需手工造数据时，可运行下方分页专项测试：它临时创建45件同值商品和1件隐藏商品，并逐页验证20/20/5条、ID顺序及筛选后的20/5条，不改变演示数据。
 
 ```bash
 PYTHONPATH=lab3/code /home/szmwtx27906/anaconda3/bin/python -m unittest test_listing.PaginationTest -v
 ```
+
+图片专项演示：先复制已发布图片链接；下架或修改重新送审后，在退出登录的窗口访问原链接应返回404，卖家本人和审核管理员仍能查看。在编辑页可移除旧图、上传新图，并按“保留的旧图→新上传图”的顺序指定封面；表单校验失败后须重新选择未保存的新文件。旧商品无图时展示占位图，缺地点显示“未填写”。
 
 页码必须为正整数：非法格式、0或负数返回400；超出末页返回404。无结果第一页显示“暂无商品”，无翻页链接。
 分页稳定保证针对同一数据集；并发上架、下架或改价后数据集变化，需要刷新重新查看。
@@ -114,6 +116,7 @@ PYTHONPATH=lab3/code /home/szmwtx27906/anaconda3/bin/python -m unittest test_lis
 默认文件是代码目录中的 data.json，与启动目录无关；MARKET_DATA_PATH 可覆盖（父目录须存在）。
 顶层保留 products、reservations、reviews、booking_requests，并兼容新增 users 账号列表。
 旧商品列表格式仍兼容，旧 rejected 作为 draft 读取，保留原因。
+旧商品缺少地点、图片和封面分别补空字符串、空列表和空字符串；仍能读取、展示。旧商品再次送审时也须满足地点及1–5张图片要求。
 旧商品缺少分类时默认为“其他”、缺版本时为1、缺发布时间时显示未知；保留已有值，下一次业务写入保存迁移后的完整文档。
 不捏造旧审核历史：原 reason/reviewer 仍保留，无法恢复的历史时间不补造；新审核开始追加完整记录。
 旧 waiting 缺少截止时间时，有创建时间则从该时间计算，否则从首次访问起算并持久保存24小时窗口。
@@ -123,7 +126,13 @@ PYTHONPATH=lab3/code /home/szmwtx27906/anaconda3/bin/python -m unittest test_lis
 临时文件与原文件同目录，json.dump、flush/fsync 后 os.replace；异常不提交，内容无变化不重复替换。
 只支持单服务进程；不同进程不共享此锁。预置账号与默认密钥用于本地演示，SECRET_KEY 可覆盖。
 
+图片默认存入 data.json 同级 uploads/，可用 MARKET_UPLOAD_DIR 覆盖；不可把它映射成公开 static 目录。JSON 只记录随机图片名称和封面名称，备份时需一起备份 JSON 和图片目录。只接受实际可解码的JPEG/PNG/WebP，每张最多5 MiB、2000万像素，请求总上限26 MiB；重新编码后保存，不信任客户端文件名或类型。图片链接每次检查当前商品状态和权限，并返回 no-store；已下载的副本无法远程撤回。
+图片写入在 transaction 锁内完成；校验或JSON保存失败清理本次新增文件。移除图片只移除JSON引用，旧文件保留但路由拒绝访问，避免失败时破坏原数据。异常进程退出可能留下未引用文件；尚无自动清理任务，文件和JSON并非跨介质事务。
+uploads/、运行用 data.json 均不入Git或提交包，干净副本无需预建它们。
+
 ## 阅读顺序
+
+本轮优先阅读：app.py 的 validate_product / submit_product / edit_product；privacy.py 的 counterparty_contact / register_contact_routes；images.py 的 stage_product_images / decode_upload / product_image；storage.py 的 load_data / transaction。对应 submit.html、products.html、reservations.html、image_placeholder.html。
 
 1. accounts.py：validate_registration、register、find_account、current_role、login；理解注册查重、密码哈希和普通用户角色。
 2. storage.py：load_data、transaction、_save_data，理解兼容和保存边界。
@@ -141,34 +150,37 @@ PYTHONPATH=lab3/code /home/szmwtx27906/anaconda3/bin/python -m unittest test_lis
 PYLINTHOME=/tmp/se-lab3-pylint /home/szmwtx27906/anaconda3/bin/python -m pylint lab3/code/*.py
 ```
 
-原32项回归继续保留并补上审核表单版本；审核修复完成后33项通过，注册实现后全量36项通过。新增测试覆盖旧审核页面的完整操作链、注册登录、重复/保留用户名、并发注册、新账号权限及独立进程重启后登录。
+历史记录：原32项回归继续保留并补上审核表单版本；审核修复完成后33项通过，注册实现后36项通过。本轮地点完成后38项通过；联系方式相关4项通过；最终独立安装依赖的环境全量46项通过（37.157秒）。新增10项覆盖地点/图片旧数据、提交校验、联系方式身份和状态矩阵、图片上传/封面/访问权限及JSON保存失败清理。新增测试覆盖旧审核页面的完整操作链、注册登录、重复/保留用户名、并发注册、新账号权限及独立进程重启后登录。
 最终 Pylint 退出码0，10.00/10。测试使用临时数据，不污染演示文件。
 原预约测试补上正式表单参数；超时后的旧页面先得到版本失效，再刷新确认成功。
 本轮还通过真实 HTTP 检查搜索、隐藏详情、历史权限、页面隐藏字段、预约重放及服务进程重启后的原结果读取。
 本轮另以独立临时 JSON 和随机本地端口通过真实 HTTP 检查注册、登录、普通用户权限及旧/当前审核表单；服务和数据已清理。浏览器视觉和点击交互尚未验证。
 
+本轮另用独立临时JSON、图片目录和随机端口进行真实HTTP请求，验证注册双方、上传与封面、地点、发布图片可访问、下架/重审旧图片链接404、卖家/管理员访问、预约双方联系方式、无关用户禁止访问及取消后禁止查看。未做浏览器点击或布局验收。
+
 ## 剩余范围
 
-本轮完成 REQ-007 普通下架与重新送审、REQ-010 稳定20条分页。REQ-010 的图片/封面、地点字段仍未实现，不能据此宣称该条全部覆盖。
+已实现普通下架与重新送审、稳定20条分页，并补齐交付地点、商品图片与封面和交易参与者联系方式。不能据此宣称实验一全部需求已实现。
 其他剩余范围：终止申请及审批、违规处置及解除、完整日志与通知，以及此前说明的全操作版本协议。
 实验说明未明确测试、HTML/CSS、空行和复用代码的计入规则，需确认；不以扩行代替需求实现。
 已初始化 lab3 本地 Git 仓库（main）；本地提交及工作区状态以 git log、git status 为准，远程配置以 git remote -v 为准。实验报告由学生独立撰写。
 
 ## 本轮行数
 
-实际执行 `wc -l lab3/code/*.py lab3/code/templates/*.html lab3/code/static/*.css`：
+实际执行 `wc -l code/*.py code/templates/*.html code/static/*.css`，并用 Python 的 `splitlines()` 和 `bool(line.strip())` 统计物理行与非空行（从 lab3 根目录执行）。
 
 | 类别 | 物理行（含空行） | 非空行 |
 | --- | ---: | ---: |
-| Python 实现 | 717 | 620 |
-| Python 测试 | 1041 | 927 |
-| HTML/Jinja | 113 | 113 |
-| CSS | 4 | 4 |
-| 合计 | 1875 | 1664 |
+| Python 实现 | 889 | 770 |
+| Python 测试 | 1342 | 1202 |
+| HTML/Jinja | 139 | 139 |
+| CSS | 7 | 7 |
+| 合计 | 2377 | 2118 |
 
-当前分项为：accounts.py 98行；app.py 364行；booking.py 94行；catalog.py 92行；storage.py 69行；test_accounts.py 134行；test_app.py 508行；test_features.py 227行；test_listing.py 172行。
-style.css 1行直接复用实验二原型，forms.css 3行沿用此前实现；HTML/Jinja沿用原型结构扩展。
-未发现 GUI 工具自动生成代码。物理行总数1875、非空总数1664均含测试和界面，不能自动视为课程认可的实现行数；需确认统计口径。
+Python 实现：accounts.py 98、app.py 374、booking.py 94、catalog.py 92、images.py 110、privacy.py 49、storage.py 72行。
+Python 测试：test_accounts.py 135、test_app.py 527、test_details.py 276、test_features.py 230、test_listing.py 174行。
+style.css 1行直接复用实验二原型，forms.css 6行是手写扩展；HTML/Jinja沿用原型结构扩展，图片占位为手写SVG。
+未发现 GUI 工具自动生成代码。统计不含README、报告、UML、运行数据和上传文件；测试及复用界面能否计入课程源码规模仍需确认，不将总行数直接认定为课程合规行数。
 
 
 ## 提交前验收与打包边界
@@ -181,7 +193,7 @@ style.css 1行直接复用实验二原型，forms.css 3行沿用此前实现；H
 - 四个演示账号均能登录，样式资源返回200。验收服务器已停止，临时数据已清理，code/data.json 未用于验收。
 
 浏览器控制返回 `The browser access host is unavailable`，故未完成真实浏览器点击、布局、键盘和视觉验收，不能将上述 HTTP 检查称为浏览器验收。
-初次提交前的验收记录：原环境及独立 Python 3.12 新安装环境均32项通过，Pylint均10.00/10；本轮注册与审核修复后的最新回归为上文36项。
+初次提交前的验收记录：原环境及独立 Python 3.12 新安装环境均32项通过，Pylint均10.00/10；注册与审核修复后为36项，本轮地点、联系方式及图片后的最新回归为46项。
 
 lab3/UML 已准备实验二原始设计快照（7份 puml + 7份 PNG），保留实现差异说明；不能把它当作全部功能均已实现的证明。
 提交包须使用以下结构；实验报告由你自行核对，本轮不生成最终 ZIP：
@@ -201,7 +213,7 @@ lab3/UML 已准备实验二原始设计快照（7份 puml + 7份 PNG），保留
     └── ...
 ```
 
-.gitignore 已排除 .venv、缓存、code/data.json、日志、ZIP 导出文件及课程说明 PDF；本地文件仍保留。
+.gitignore 已排除 .venv、缓存、code/data.json、code/uploads/、日志、ZIP 导出文件及课程说明 PDF；本地文件仍保留。
 运行数据不需要打包：应用支持缺失 data.json，第一次业务写入自动创建。所有代码、模板、样式、依赖清单、测试和 UML 应保留。
 .gitignore 不会自动过滤手工压缩。不要直接压缩整个 lab3，也不要将 .git、.venv、缓存和自己的真实运行数据放入提交包。
 

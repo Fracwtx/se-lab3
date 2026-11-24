@@ -9,8 +9,13 @@
 <button class="btn primary">搜索</button><a class="btn secondary" href="{{ url_for('public_list') }}">清除条件</a></form>{% endif %}
 {% for product in products %}<article class="panel">
 <h2>{{ product.title or "未命名草稿" }}</h2><span class="status">{{ status_labels[product.status] }}</span>
+{% if product.images %}<div class="product-gallery">
+{% for name in (product.images if detail or review else [product.cover or product.images[0]]) %}
+<a href="{{ url_for('product_image', product_id=product.id, filename=name) }}"><img src="{{ url_for('product_image', product_id=product.id, filename=name) }}" alt="{{ product.title }} 实物图 {{ loop.index }}" loading="lazy"></a>
+{% endfor %}</div>{% else %}{% include 'image_placeholder.html' %}{% endif %}
 <p>分类：{{ product.category }} · 发布时间：{{ product.published_at or "未知（旧数据）" }}</p>
 {% if product.status == 'approved' %}<a href="{{ url_for('public_detail', product_id=product.id) }}">查看公开详情</a>{% endif %}
+<p>交付地点：{{ product.delivery_location or "未填写" }}</p>
 <p class="copy">{{ product.description }}</p><p class="price">¥ {{ product.price }}</p>
 {% if role == 'admin' or (role == 'user' and product.seller == session.username) %}<a href="{{ url_for('review_history', product_id=product.id) }}">审核历史</a>{% endif %}
 {% if product.reason %}<p>审核意见：{{ product.reason }}</p>{% endif %}

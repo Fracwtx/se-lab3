@@ -89,4 +89,4 @@ def register_catalog_routes(application):
                         if item['id'] == product_id and item['status'] == 'approved'), None)
         if product is None:
             abort(404)
-        return render_template('products.html', heading='商品详情', products=[product])
+        return render_template('products.html', heading='商品详情', products=[product], detail=True)

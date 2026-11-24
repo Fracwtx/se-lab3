@@ -27,7 +27,10 @@ def load_data(path=DEFAULT_PATH):
         for product in data['products']:
             product.setdefault('version', 1)
             product.setdefault('category', '其他')
+            product.setdefault('delivery_location', '')
             product.setdefault('published_at', '')
+            product.setdefault('images', [])
+            product.setdefault('cover', '')
             if product['status'] == 'rejected':
                 product['status'] = 'draft'
         return data

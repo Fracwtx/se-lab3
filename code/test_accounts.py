@@ -29,6 +29,7 @@ class ReviewVersionTest(MarketCase):
                 self.login('user', 'user123')
                 self.client.post('/withdraw/' + product_id)
                 self.client.post('/edit/' + product_id, data={
+                    'delivery_location': '图书馆东门',
                     'title': '审核版本商品', 'description': '改价后重新审核',
                     'price': '19.00', 'action': 'resubmit'})
                 self.login('admin', 'admin123')

@@ -4,6 +4,7 @@
 <h2>{{ item.title }}</h2><span class="status">{{ status_labels[item.status] }}</span>
 <p>成交价格：¥ {{ item.price }} · 卖家：{{ item.seller }} · 买家：{{ item.buyer }}</p>
 {% if item.expires_at %}<p>确认截止（UTC）：{{ item.expires_at }}</p>{% endif %}
+{% if item.counterparty_contact is not none %}<p>对方联系方式：{{ item.counterparty_contact }}</p>{% endif %}
 {% if item.reason %}<p>处理原因：{{ item.reason }}</p>{% endif %}
 {% if item.buyer == session.username and item.status == 'waiting' %}
 <form method="post" action="{{ url_for('cancel_reservation', reservation_id=item.id) }}"><button class="btn secondary">取消预约</button></form>{% endif %}

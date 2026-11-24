@@ -17,7 +17,8 @@ class SearchTest(MarketCase):
         super().setUp()
         with transaction(self.path) as data:
             data['products'] = [
-                {'id': key, 'title': title, 'description': description, 'price': price,
+                {'id': key, 'delivery_location': '图书馆东门',
+                'title': title, 'description': description, 'price': price,
                  'status': status, 'category': category, 'seller': 'user', 'reason': '',
                  'published_at': date}
                 for key, title, description, price, status, category, date in (
@@ -71,6 +72,7 @@ class ReviewHistoryTest(MarketCase):
                          data={'decision': 'rejected', 'reason': '描述不清楚'})
         self.login('user', 'user123')
         self.client.post(f'/edit/{product_id}', data={
+            'delivery_location': '图书馆东门',
             'title': '历史商品', 'description': '完整描述', 'price': '15', 'action': 'resubmit'})
         self.assertIn('描述不清楚', self.client.get('/reviews').get_data(as_text=True))
         self.login('admin', 'admin123')
@@ -119,6 +121,7 @@ class BookingTest(MarketCase):
         old = self.booking_form(product_id, 'old-page')
         self.login('user', 'user123')
         self.client.post(f'/edit/{product_id}', data={
+            'delivery_location': '图书馆东门',
             'title': '改价商品', 'description': '已调整', 'price': '19.00', 'action': 'resubmit'})
         self.login('admin', 'admin123')
         self.review(f'/review/{product_id}', data={'decision': 'approved'})

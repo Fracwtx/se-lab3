@@ -1,6 +1,7 @@
 """Exercise the real HTTP routes and JSON persistence using isolated files."""
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 import json
 import shutil
 import subprocess
@@ -12,8 +13,18 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
+from PIL import Image
+
 from app import create_app
 from storage import load_data, load_products, transaction
+
+
+def image_upload(filename='product.png', color='green'):
+    """Create a fresh small real image for a multipart form."""
+    stream = BytesIO()
+    Image.new('RGB', (8, 8), color).save(stream, format='PNG')
+    stream.seek(0)
+    return stream, filename
 
 
 class MarketCase(unittest.TestCase):
@@ -36,8 +47,9 @@ class MarketCase(unittest.TestCase):
     def submit(self, title):
         """Submit a valid product and return its persisted identifier."""
         response = self.client.post('/submit', data={
+            'delivery_location': '图书馆东门',
             'title': title, 'description': '正常使用，可当面检查', 'price': '12.50',
-            'status': 'approved'})
+            'status': 'approved', 'images': image_upload()})
         self.assertEqual(response.status_code, 302)
         return load_products(self.path)[-1]['id']
 
@@ -138,7 +150,8 @@ class ProductTest(MarketCase):
                          data={'decision': 'rejected', 'reason': '补充描述'})
         self.assertEqual(load_products(self.path)[0]['status'], 'draft')
         self.login('buyer', 'buyer123')
-        fields = {'title': '新标题', 'description': '完整描述', 'price': '15.00',
+        fields = {'delivery_location': '图书馆东门',
+        'title': '新标题', 'description': '完整描述', 'price': '15.00',
                   'action': 'resubmit', 'seller': 'buyer', 'status': 'approved'}
         self.assertEqual(self.client.get(f'/edit/{product_id}').status_code, 403)
         self.assertEqual(self.client.post(f'/edit/{product_id}', data=fields).status_code, 403)
@@ -225,7 +238,8 @@ class ProductTest(MarketCase):
 
     def test_legacy_rejected_data(self):
         """A legacy product list remains readable and migrates on the next write."""
-        legacy = [{'id': 'legacy', 'seller': 'user', 'title': '旧商品',
+        legacy = [{'id': 'legacy', 'seller': 'user', 'delivery_location': '图书馆东门',
+        'title': '旧商品',
                    'description': '旧描述', 'price': '10.00', 'status': 'rejected',
                    'reason': '旧驳回原因'}]
         self.path.write_text(json.dumps(legacy), encoding='utf-8')
@@ -233,8 +247,9 @@ class ProductTest(MarketCase):
         self.assertNotIn('旧商品', self.client.get('/').get_data(as_text=True))
         self.login('user', 'user123')
         self.assertEqual(self.client.post('/edit/legacy', data={
+            'delivery_location': '图书馆东门',
             'title': '修订商品', 'description': '修订描述', 'price': '10.00',
-            'action': 'resubmit'}).status_code, 302)
+            'action': 'resubmit', 'images': image_upload()}).status_code, 302)
         data = json.loads(self.path.read_text(encoding='utf-8'))
         self.assertEqual(data['reservations'], [])
         self.assertEqual(data['products'][0]['status'], 'pending')
@@ -245,13 +260,14 @@ class ProductTest(MarketCase):
         """A failed replacement cannot partially commit either business record."""
         self.publish()
         before = self.path.read_bytes()
+        directory_before = set(self.path.parent.iterdir())
         with patch('storage.os.replace', side_effect=OSError('disk failure')):
             with self.assertRaises(OSError):
                 with transaction(self.path) as data:
                     data['products'][0]['status'] = 'reserved'
                     data['reservations'].append({'id': 'unsaved'})
         self.assertEqual(self.path.read_bytes(), before)
-        self.assertEqual(list(self.path.parent.iterdir()), [self.path])
+        self.assertEqual(set(self.path.parent.iterdir()), directory_before)
 
 
     def test_nonpublished_products_cannot_be_reserved(self):
@@ -290,8 +306,9 @@ class ProductTest(MarketCase):
             'action': 'save'}).status_code, 302)
         self.assertEqual(load_products(self.path)[0]['title'], '')
         self.assertEqual(self.client.post(f'/edit/{product_id}', data={
+            'delivery_location': '图书馆东门',
             'title': '完整', 'description': '补充', 'price': '8',
-            'action': 'resubmit'}).status_code, 302)
+            'action': 'resubmit', 'images': image_upload()}).status_code, 302)
         self.assertEqual(load_products(self.path)[0]['status'], 'pending')
 
 
@@ -315,7 +332,8 @@ class ProductTest(MarketCase):
     def test_published_edit_reaudit_and_active_reservation(self):
         """Published edits stop public display; an active reservation forbids edits."""
         product_id = self.publish()
-        fields = {'title': '修改后商品', 'description': '新描述', 'price': '20',
+        fields = {'delivery_location': '图书馆东门',
+        'title': '修改后商品', 'description': '新描述', 'price': '20',
                   'action': 'resubmit'}
         self.login('buyer', 'buyer123')
         self.assertEqual(self.client.post(f'/edit/{product_id}', data=fields).status_code, 403)
@@ -350,6 +368,7 @@ class ProductTest(MarketCase):
         for price in ('0', '-1', 'NaN', 'Infinity', '1.001', 'abc', '100001'):
             with self.subTest(price=price):
                 self.assertEqual(self.client.post('/submit', data={
+                    'delivery_location': '图书馆东门',
                     'title': '书', 'description': '旧书', 'price': price}).status_code, 400)
         self.assertEqual(load_products(self.path), [])
         self.login('admin', 'admin123')

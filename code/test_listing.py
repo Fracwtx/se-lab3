@@ -49,7 +49,8 @@ class OffShelfTest(MarketCase):
         self.assertNotIn('<h2>下架演示', self.client.get('/?q=下架').get_data(as_text=True))
         self.assertEqual(self.client.get('/products/' + product_id).status_code, 404)
         self.assertEqual(self.client.post('/off-shelf/' + product_id).status_code, 409)
-        fields = {'title': '下架后修改', 'description': '更新描述', 'price': '15.00',
+        fields = {'delivery_location': '图书馆东门',
+        'title': '下架后修改', 'description': '更新描述', 'price': '15.00',
                   'action': 'save'}
         self.assertEqual(self.client.get('/edit/' + product_id).status_code, 200)
         self.assertEqual(self.client.post('/edit/' + product_id, data=fields).status_code, 302)
@@ -112,7 +113,8 @@ class PaginationTest(MarketCase):
         super().setUp()
         with transaction(self.path) as data:
             data['products'] = [
-                {'id': f'{index:03}', 'title': f'教材{index:03}', 'description': '良好',
+                {'id': f'{index:03}', 'delivery_location': '图书馆东门',
+                'title': f'教材{index:03}', 'description': '良好',
                  'price': '10.00', 'category': '图书教材' if index < 25 else '其他',
                  'status': 'approved', 'seller': 'user', 'reason': '',
                  'published_at': '2026-11-24T00:00:00+00:00'}

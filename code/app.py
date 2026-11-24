@@ -2,6 +2,7 @@
 import os
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from uuid import uuid4
 
 from flask import Flask, abort, redirect, render_template, request, session, url_for
@@ -10,6 +11,8 @@ from accounts import current_role, register_account_routes, require_role
 from booking import (associated_reservation, find_booking_request, parse_booking_form,
                      process_booking, reservation_times)
 from catalog import register_catalog_routes
+from images import new_image_files, register_image_routes, stage_product_images
+from privacy import register_contact_routes
 from storage import DEFAULT_PATH, load_data, load_products, transaction
 
 STATUS_LABELS = {'draft': '草稿', 'pending': '待审核', 'approved': '已发布',
@@ -25,12 +28,16 @@ def validate_product(form, *, partial=False):
     if (len(title) > 100 or len(description) > 2000
             or (not partial and (not title or not description))):
         raise ValueError('标题须为1–100字，描述须为1–2000字。')
+    location = form.get('delivery_location', '').strip()
+    if len(location) > 200 or (not partial and not location):
+        raise ValueError('送审须填写交付地点，最多200字。')
     category = form.get('category', '其他').strip() or '其他'
     if len(category) > 50:
         raise ValueError('分类不能超过50字。')
     price_text = form.get('price', '').strip()
     if partial and not price_text:
-        return {'title': title, 'description': description, 'price': '', 'category': category}
+        return {'title': title, 'description': description, 'price': '', 'category': category,
+                'delivery_location': location}
     try:
         price = Decimal(price_text)
     except InvalidOperation as error:
@@ -39,7 +46,7 @@ def validate_product(form, *, partial=False):
             or price.as_tuple().exponent < -2):
         raise ValueError('价格须大于0且不超过100000元，最多两位小数。')
     return {'title': title, 'description': description, 'price': format(price, '.2f'),
-            'category': category}
+            'category': category, 'delivery_location': location}
 
 
 def find_record(records, record_id):
@@ -69,9 +76,12 @@ def create_app(data_path=None):
         SECRET_KEY=os.environ.get('SECRET_KEY', 'campus-market-local-demo-only'),
         DATA_PATH=data_path or os.environ.get('MARKET_DATA_PATH', DEFAULT_PATH),
         SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
-        MAX_CONTENT_LENGTH=64 * 1024,
+        MAX_CONTENT_LENGTH=26 * 1024 * 1024,
         CLOCK=lambda: datetime.now(timezone.utc),
     )
+
+    application.config['UPLOAD_DIR'] = os.environ.get('MARKET_UPLOAD_DIR') or str(
+        Path(application.config['DATA_PATH']).with_name('uploads'))
 
     @application.context_processor
     def template_context():
@@ -88,13 +98,16 @@ def create_app(data_path=None):
                 abort(400)
             try:
                 product = validate_product(request.form, partial=action == 'save')
+                product.update(id=uuid4().hex, seller=session['username'],
+                               status='draft' if action == 'save' else 'pending',
+                               reason='', reviewer='', version=1, published_at='')
+                with (new_image_files() as created,
+                      transaction(application.config['DATA_PATH']) as data):
+                    product.update(stage_product_images(product, partial=action == 'save',
+                                                        created=created))
+                    data['products'].append(product)
             except ValueError as error:
                 return render_template('submit.html', error=str(error)), 400
-            product.update(id=uuid4().hex, seller=session['username'],
-                           status='draft' if action == 'save' else 'pending',
-                           reason='', reviewer='', version=1, published_at='')
-            with transaction(application.config['DATA_PATH']) as data:
-                data['products'].append(product)
             return redirect(url_for('my_products'))
         return render_template('submit.html')
 
@@ -111,6 +124,8 @@ def create_app(data_path=None):
     register_expiry_check(application)
     register_product_routes(application)
     register_trade_routes(application)
+    register_contact_routes(application)
+    register_image_routes(application)
     return application
 
 
@@ -225,7 +240,8 @@ def register_product_routes(application):
                                    published=product['status'] == 'approved',
                                    off_shelf=product['status'] == 'off_shelf')
         try:
-            with transaction(application.config['DATA_PATH']) as data:
+            with (new_image_files() as created,
+                  transaction(application.config['DATA_PATH']) as data):
                 product = find_record(data['products'], product_id)
                 check_editable(data, product)
                 action = request.form.get('action')
@@ -233,13 +249,15 @@ def register_product_routes(application):
                         product['status'] == 'approved' and action != 'resubmit'):
                     abort(400)
                 fields = validate_product(request.form, partial=action == 'save')
+                fields.update(stage_product_images(product, partial=action == 'save',
+                                                   created=created))
                 product.update(fields)
                 if action == 'resubmit':
                     product['status'] = 'pending'
                 # Saving off-shelf edits keeps that state; only audit can republish.
                 product['version'] += 1
         except ValueError as error:
-            return render_template('submit.html', error=str(error), editing=True,
+            return render_template('submit.html', error=str(error), editing=True, values=product,
                                    published=product['status'] == 'approved',
                                    off_shelf=product['status'] == 'off_shelf'), 400
         return redirect(url_for('my_products'))
@@ -300,14 +318,6 @@ def register_trade_routes(application):
             abort(404)
         return render_template('booking_result.html', result=result,
                                reservation=associated_reservation(data, result))
-
-    @application.get('/reservations')
-    @require_role('user')
-    def my_reservations():
-        """Show only reservations in which the current user participates."""
-        records = load_data(application.config['DATA_PATH'])['reservations']
-        return render_template('reservations.html', reservations=[
-            item for item in records if session['username'] in (item['seller'], item['buyer'])])
 
     def transition_reservation(reservation_id, owner, old_status, new_status, reason=''):
         """Authorize a transition and commit both records; recheck time under the lock."""
