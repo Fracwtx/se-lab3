@@ -1,0 +1,8 @@
+{% extends 'base.html' %}{% block content %}
+<h1>审核历史</h1>
+{% for entry in reviews|reverse %}<article class="panel">
+<h2>{{ entry.title }}</h2><p>商品编号：{{ entry.product_id }} · 审核版本：{{ entry.reviewed_version }}</p>
+<p>{{ '通过' if entry.decision == 'approved' else '驳回' }} · 审核人：{{ entry.reviewer }} · 时间（UTC）：{{ entry.reviewed_at }}</p>
+<p class="copy">原因：{{ entry.reason or '无附加意见' }}</p>
+</article>{% else %}<p>暂无审核历史。</p>{% endfor %}
+{% endblock %}

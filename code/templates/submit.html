@@ -1,0 +1,12 @@
+{% extends 'base.html' %}{% block content %}{% set fields = request.form if request.method == 'POST' else values|default({}) %}
+<h1>{{ "编辑商品" if editing else "提交商品" }}</h1><p>提交后进入待审核状态，审核通过后才会公开展示。</p>
+<form method="post" class="panel">
+<label>标题<input name="title" required maxlength="100" value="{{ fields.get('title', '') }}"></label>
+<label>描述<textarea name="description" required maxlength="2000" rows="6">{{ fields.get('description', '') }}</textarea></label>
+<label>分类<input name="category" maxlength="50" value="{{ fields.get('category', '其他') }}" list="categories"></label>
+<datalist id="categories"><option value="图书教材"><option value="数码电子"><option value="生活用品"><option value="其他"></datalist>
+<label>价格（元）<input name="price" type="number" required min="0.01" max="100000" step="0.01" value="{{ fields.get('price', '') }}"></label>
+{% if not published %}<button class="btn secondary" name="action" value="save" formnovalidate>{{ "保存修改（保持下架）" if off_shelf else "保存草稿" }}</button>{% endif %}
+{% if editing %}
+<button class="btn primary" name="action" value="resubmit">再次送审</button>
+{% else %}<button class="btn primary" name="action" value="resubmit">提交审核</button>{% endif %}</form>{% endblock %}

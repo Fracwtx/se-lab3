@@ -1,0 +1,6 @@
+{% extends 'base.html' %}{% block content %}
+<h1>账号登录</h1><p>演示普通用户：user / user123；买家：buyer / buyer123；另一买家：other / other123；管理员：admin / admin123</p>
+<form method="post" class="panel">
+<label>账号<input name="username" required autocomplete="username"></label>
+<label>密码<input name="password" type="password" required autocomplete="current-password"></label>
+<button class="btn primary">登录</button></form>{% endblock %}

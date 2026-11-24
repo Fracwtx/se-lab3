@@ -1,0 +1,16 @@
+{% extends 'base.html' %}{% block content %}
+<h1>我的交易</h1>
+{% for item in reservations %}<article class="panel">
+<h2>{{ item.title }}</h2><span class="status">{{ status_labels[item.status] }}</span>
+<p>成交价格：¥ {{ item.price }} · 卖家：{{ item.seller }} · 买家：{{ item.buyer }}</p>
+{% if item.expires_at %}<p>确认截止（UTC）：{{ item.expires_at }}</p>{% endif %}
+{% if item.reason %}<p>处理原因：{{ item.reason }}</p>{% endif %}
+{% if item.buyer == session.username and item.status == 'waiting' %}
+<form method="post" action="{{ url_for('cancel_reservation', reservation_id=item.id) }}"><button class="btn secondary">取消预约</button></form>{% endif %}
+{% if item.seller == session.username and item.status == 'waiting' %}
+<form method="post" action="{{ url_for('confirm_reservation', reservation_id=item.id) }}"><button class="btn primary">确认预约</button></form>
+<form method="post" action="{{ url_for('reject_reservation', reservation_id=item.id) }}"><label>拒绝原因<textarea name="reason" required maxlength="500" rows="2"></textarea></label><button class="btn secondary">拒绝预约</button></form>{% endif %}
+{% if item.buyer == session.username and item.status == 'confirmed' %}
+<form method="post" action="{{ url_for('complete_reservation', reservation_id=item.id) }}"><button class="btn primary">已收货，确认完成</button></form>{% endif %}
+</article>{% else %}<p>暂无交易。</p>{% endfor %}
+{% endblock %}

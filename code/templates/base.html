@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>校园集 · 二手交易</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}"></head>
+<body><div class="app">
+<header><a class="wordmark" href="{{ url_for('public_list') }}"><span class="brand-icon">↗</span>校园集<span class="brand-sub">让闲置，继续被喜欢。</span></a>
+<nav class="header-right"><a href="{{ url_for('public_list') }}">公开列表</a>
+{% if role == 'user' %}<a href="{{ url_for('submit_product') }}">提交商品</a><a href="{{ url_for('my_products') }}">我的商品</a><a href="{{ url_for('my_reservations') }}">我的交易</a>{% endif %}
+{% if role == 'admin' %}<a href="{{ url_for('review_queue') }}">商品审核</a>{% endif %}
+{% if role %}<a href="{{ url_for('review_history') }}">审核历史</a><span>{{ session.username }}</span><form method="post" action="{{ url_for('logout') }}"><button class="btn secondary">退出</button></form>
+{% else %}<a href="{{ url_for('login') }}">登录</a>{% endif %}</nav></header>
+<main>{% if error %}<p class="notice" role="alert">{{ error }}</p>{% endif %}{% block content %}{% endblock %}</main>
+<footer><span>校园集 / 校园二手交易</span><span>校内见面 · 线下交付</span><span>本地实验演示</span></footer>
+</div></body></html>

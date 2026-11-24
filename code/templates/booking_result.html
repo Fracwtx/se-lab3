@@ -1,0 +1,8 @@
+{% extends 'base.html' %}{% block content %}
+<h1>预约请求结果</h1><section class="panel">
+<p>首次处理结果：{{ result.message }}</p>
+{% if reservation %}<p>预约编号：{{ reservation.id }}</p><p>当前状态：{{ status_labels[reservation.status] }}</p><p>当时确认价格：¥ {{ reservation.price }}</p>{% endif %}
+<p>重复提交会显示此次处理结果。要重新预约，请先刷新商品列表并再次确认。</p>
+<a class="btn primary" href="{{ url_for('my_reservations') }}">查看我的交易</a>
+<a class="btn secondary" href="{{ url_for('public_list') }}">刷新商品列表并重新确认</a>
+</section>{% endblock %}

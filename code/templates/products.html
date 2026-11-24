@@ -1,0 +1,36 @@
+{% extends 'base.html' %}{% block content %}
+<div class="list-heading"><h1>{{ heading }}</h1></div>
+{% if search %}<form method="get" class="panel">
+<label>关键词<input name="q" value="{{ request.args.get('q', '') }}"></label>
+<label>分类<select name="category"><option value="">全部分类</option>{% for category in categories %}<option {% if request.args.get('category') == category %}selected{% endif %}>{{ category }}</option>{% endfor %}</select></label>
+<label>最低价<input name="min_price" type="number" min="0" max="100000" step="0.01" value="{{ request.args.get('min_price', '') }}"></label>
+<label>最高价<input name="max_price" type="number" min="0" max="100000" step="0.01" value="{{ request.args.get('max_price', '') }}"></label>
+<label>排序<select name="sort">{% for value, label in sorts.items() %}<option value="{{ value }}" {% if request.args.get('sort', 'newest') == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<button class="btn primary">搜索</button><a class="btn secondary" href="{{ url_for('public_list') }}">清除条件</a></form>{% endif %}
+{% for product in products %}<article class="panel">
+<h2>{{ product.title or "未命名草稿" }}</h2><span class="status">{{ status_labels[product.status] }}</span>
+<p>分类：{{ product.category }} · 发布时间：{{ product.published_at or "未知（旧数据）" }}</p>
+{% if product.status == 'approved' %}<a href="{{ url_for('public_detail', product_id=product.id) }}">查看公开详情</a>{% endif %}
+<p class="copy">{{ product.description }}</p><p class="price">¥ {{ product.price }}</p>
+{% if role == 'admin' or (role == 'user' and product.seller == session.username) %}<a href="{{ url_for('review_history', product_id=product.id) }}">审核历史</a>{% endif %}
+{% if product.reason %}<p>审核意见：{{ product.reason }}</p>{% endif %}
+{% if review %}<p>卖家：{{ product.seller }}</p>
+<form method="post" action="{{ url_for('review_product', product_id=product.id) }}">
+<label>驳回原因（驳回时必填）<textarea name="reason" maxlength="500" rows="2"></textarea></label>
+<button class="btn primary" name="decision" value="approved">通过</button>
+<button class="btn secondary" name="decision" value="rejected">驳回</button></form>{% endif %}
+{% if role == 'user' and product.seller == session.username and product.status in ('draft', 'approved', 'off_shelf') %}
+<a class="btn secondary" href="{{ url_for('edit_product', product_id=product.id) }}">编辑 / 重新送审</a>{% endif %}
+{% if role == 'user' and product.seller == session.username and product.status == 'approved' %}
+<form method="post" action="{{ url_for('take_off_shelf', product_id=product.id) }}"><button class="btn secondary">普通下架</button></form>{% endif %}
+{% if role == 'user' and product.seller == session.username and product.status == 'pending' %}
+<form method="post" action="{{ url_for('withdraw_product', product_id=product.id) }}"><button class="btn secondary">撤回审核</button></form>{% endif %}
+{% if role == 'user' and product.seller != session.username and product.status == 'approved' %}
+<form method="post" action="{{ url_for('reserve_product', product_id=product.id) }}"><input type="hidden" name="request_id" value="{{ new_request_id() }}">
+<input type="hidden" name="expected_version" value="{{ product.version }}"><input type="hidden" name="expected_price" value="{{ product.price }}"><button class="btn primary">按 ¥ {{ product.price }} 预约</button></form>{% endif %}
+</article>{% else %}<p>暂无商品。</p>{% endfor %}
+{% if pagination %}<nav class="panel" aria-label="商品分页">
+<p>共 {{ pagination.total }} 件商品 · 第 {{ pagination.page }} / {{ pagination.pages }} 页 · 每页20件</p>
+{% if pagination.previous %}<a class="btn secondary" rel="prev" href="{{ pagination.previous }}">上一页</a>{% endif %}
+{% if pagination.next %}<a class="btn secondary" rel="next" href="{{ pagination.next }}">下一页</a>{% endif %}
+</nav>{% endif %}{% endblock %}

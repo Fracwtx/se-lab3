@@ -1,0 +1,18 @@
+# Local Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pylint.d/
+
+# Runtime data and local secrets (the app creates missing data on first write)
+/code/data.json
+.env
+.env.*
+*.log
+
+# Exported packages and course instructions are not source deliverables
+/dist/
+*.zip
+/实验三_软件实现与构建.pdf
