@@ -47,9 +47,17 @@ class MarketCase(unittest.TestCase):
         self.login('user', 'user123')
         product_id = self.submit(title)
         self.login('admin', 'admin123')
-        self.client.post(f'/review/{product_id}', data={'decision': 'approved'})
+        self.review(f'/review/{product_id}', data={'decision': 'approved'})
         return product_id
 
+
+    def review(self, route, data=None):
+        """Submit the review version supplied by a freshly loaded admin page."""
+        product_id = route.rsplit('/', 1)[-1]
+        product = next((item for item in load_data(self.path)['products']
+                        if item['id'] == product_id), {})
+        return self.client.post(route, data={
+            'expected_version': str(product.get('version', 1)), **(data or {})})
 
     def booking_form(self, product_id, request_id=None):
         """Capture the page version and price before sending an explicit booking request."""
@@ -83,15 +91,15 @@ class ProductTest(MarketCase):
         rejected_id = self.submit('驳回商品')
         self.assertNotIn('通过商品', self.client.get('/').get_data(as_text=True))
         self.assertEqual(self.client.get('/admin').status_code, 403)
-        self.assertEqual(self.client.post(f'/review/{approved_id}',
+        self.assertEqual(self.review(f'/review/{approved_id}',
                                          data={'decision': 'approved'}).status_code, 403)
         self.assertEqual(load_products(self.path)[0]['status'], 'pending')
         self.login('admin', 'admin123')
-        self.assertEqual(self.client.post(f'/review/{approved_id}',
+        self.assertEqual(self.review(f'/review/{approved_id}',
                                          data={'decision': 'approved'}).status_code, 302)
-        self.assertEqual(self.client.post(f'/review/{rejected_id}', data={
+        self.assertEqual(self.review(f'/review/{rejected_id}', data={
             'decision': 'rejected', 'reason': '描述不充分'}).status_code, 302)
-        self.assertEqual(self.client.post(f'/review/{approved_id}',
+        self.assertEqual(self.review(f'/review/{approved_id}',
                                          data={'decision': 'rejected',
                                                'reason': '重复处理'}).status_code, 409)
         fresh_client = create_app(self.path).test_client()
@@ -108,7 +116,7 @@ class ProductTest(MarketCase):
         self.login('user', 'user123')
         product_id = self.submit('跨进程商品')
         self.login('admin', 'admin123')
-        self.client.post(f'/review/{product_id}', data={'decision': 'approved'})
+        self.review(f'/review/{product_id}', data={'decision': 'approved'})
         result = subprocess.run(
             [sys.executable, '-c',
              "import sys; from app import create_app; "
@@ -126,7 +134,7 @@ class ProductTest(MarketCase):
         self.login('user', 'user123')
         product_id = self.submit('旧标题')
         self.login('admin', 'admin123')
-        self.client.post(f'/review/{product_id}',
+        self.review(f'/review/{product_id}',
                          data={'decision': 'rejected', 'reason': '补充描述'})
         self.assertEqual(load_products(self.path)[0]['status'], 'draft')
         self.login('buyer', 'buyer123')
@@ -146,7 +154,7 @@ class ProductTest(MarketCase):
                          ('pending', 'user', '补充描述'))
         self.assertEqual(self.client.post(f'/edit/{product_id}', data=fields).status_code, 409)
         self.login('admin', 'admin123')
-        self.client.post(f'/review/{product_id}', data={'decision': 'approved'})
+        self.review(f'/review/{product_id}', data={'decision': 'approved'})
         self.assertIn('新标题', self.client.get('/').get_data(as_text=True))
 
 
@@ -300,7 +308,7 @@ class ProductTest(MarketCase):
         self.assertEqual(load_products(self.path)[0]['status'], 'draft')
         self.assertEqual(self.client.post(f'/withdraw/{product_id}').status_code, 409)
         self.login('admin', 'admin123')
-        self.assertEqual(self.client.post(f'/review/{product_id}',
+        self.assertEqual(self.review(f'/review/{product_id}',
                                          data={'decision': 'approved'}).status_code, 409)
 
 
@@ -319,7 +327,7 @@ class ProductTest(MarketCase):
         self.assertEqual(load_products(self.path)[0]['status'], 'pending')
         self.assertNotIn('修改后商品', self.client.get('/').get_data(as_text=True))
         self.login('admin', 'admin123')
-        self.client.post(f'/review/{product_id}', data={'decision': 'approved'})
+        self.review(f'/review/{product_id}', data={'decision': 'approved'})
         self.assertIn('修改后商品', self.client.get('/').get_data(as_text=True))
         self.login('buyer', 'buyer123')
         self.reserve(product_id)
@@ -336,7 +344,7 @@ class ProductTest(MarketCase):
     def test_authentication_and_validation(self):
         """Unauthorized or invalid requests cannot create or review products."""
         self.assertEqual(self.client.post('/submit').status_code, 403)
-        self.assertEqual(self.client.post('/review/missing').status_code, 403)
+        self.assertEqual(self.review('/review/missing').status_code, 403)
         self.assertEqual(self.login('admin', 'wrong').status_code, 401)
         self.login('user', 'user123')
         for price in ('0', '-1', 'NaN', 'Infinity', '1.001', 'abc', '100001'):
@@ -346,7 +354,7 @@ class ProductTest(MarketCase):
         self.assertEqual(load_products(self.path), [])
         self.login('admin', 'admin123')
         self.assertEqual(self.client.post('/submit').status_code, 403)
-        self.assertEqual(self.client.post('/review/missing',
+        self.assertEqual(self.review('/review/missing',
                                          data={'decision': 'approved'}).status_code, 404)
 
 

@@ -21,6 +21,7 @@ def load_data(path=DEFAULT_PATH):
             data = []
         if isinstance(data, list):
             data = {'products': data, 'reservations': []}
+        data.setdefault('users', [])
         data.setdefault('reviews', [])
         data.setdefault('booking_requests', [])
         for product in data['products']:

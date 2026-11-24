@@ -62,7 +62,7 @@ class OffShelfTest(MarketCase):
         self.assertEqual(load_data(self.path)['products'][0]['status'], 'pending')
         self.assertEqual(self.client.get('/products/' + product_id).status_code, 404)
         self.login('admin', 'admin123')
-        self.client.post('/review/' + product_id, data={'decision': 'approved'})
+        self.review('/review/' + product_id, data={'decision': 'approved'})
         self.assertEqual(self.client.get('/products/' + product_id).status_code, 200)
         self.assertEqual(len(load_data(self.path)['reviews']), 2)
         self.assertIn('<h2>下架后修改', self.client.get('/').get_data(as_text=True))

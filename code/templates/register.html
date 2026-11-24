@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% block content %}
+<h1>创建普通用户账号</h1><p>以下四项为必填。注册后可用同一个账号买卖闲置。</p>
+<form method="post" class="panel">
+<label>用户名<input name="username" required maxlength="50" autocomplete="username" value="{{ request.form.get('username', '') }}"></label>
+<label>密码<input name="password" type="password" required minlength="8" maxlength="128" autocomplete="new-password"></label>
+<label>昵称<input name="nickname" required maxlength="50" autocomplete="nickname" value="{{ request.form.get('nickname', '') }}"></label>
+<label>联系方式<input name="contact_info" required maxlength="200" value="{{ request.form.get('contact_info', '') }}"></label>
+<p>联系方式不会在公开商品列表或详情中展示。</p>
+<button class="btn primary">注册</button></form>
+<p>已有账号？<a href="{{ url_for('login') }}">返回登录</a></p>
+{% endblock %}

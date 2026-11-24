@@ -67,27 +67,27 @@ class ReviewHistoryTest(MarketCase):
         self.login('user', 'user123')
         product_id = self.submit('历史商品')
         self.login('admin', 'admin123')
-        self.client.post(f'/review/{product_id}',
+        self.review(f'/review/{product_id}',
                          data={'decision': 'rejected', 'reason': '描述不清楚'})
         self.login('user', 'user123')
         self.client.post(f'/edit/{product_id}', data={
             'title': '历史商品', 'description': '完整描述', 'price': '15', 'action': 'resubmit'})
         self.assertIn('描述不清楚', self.client.get('/reviews').get_data(as_text=True))
         self.login('admin', 'admin123')
-        self.client.post(f'/review/{product_id}', data={'decision': 'approved', 'reason': '合规'})
+        self.review(f'/review/{product_id}', data={'decision': 'approved', 'reason': '合规'})
         history = load_data(self.path)['reviews']
         self.assertEqual([entry['decision'] for entry in history], ['rejected', 'approved'])
         self.assertTrue(all(entry['product_id'] == product_id and entry['reviewer'] == 'admin'
                             and entry['reviewed_at'] for entry in history))
         self.assertIn('描述不清楚', self.client.get('/reviews').get_data(as_text=True))
-        self.assertEqual(self.client.post(f'/review/{product_id}',
+        self.assertEqual(self.review(f'/review/{product_id}',
                                          data={'decision': 'approved'}).status_code, 409)
         self.assertEqual(len(load_data(self.path)['reviews']), 2)
         self.login('buyer', 'buyer123')
         self.assertNotIn('描述不清楚', self.client.get('/reviews').get_data(as_text=True))
         other_id = self.submit('别人的商品')
         self.login('admin', 'admin123')
-        self.client.post(f'/review/{other_id}',
+        self.review(f'/review/{other_id}',
                          data={'decision': 'rejected', 'reason': '他人的私有意见'})
         self.assertIn('他人的私有意见', self.client.get('/reviews').get_data(as_text=True))
         self.login('user', 'user123')
@@ -105,7 +105,7 @@ class ReviewHistoryTest(MarketCase):
         before = self.path.read_bytes()
         with patch('storage.os.replace', side_effect=OSError('disk failure')):
             with self.assertRaises(OSError):
-                self.client.post(f'/review/{product_id}', data={'decision': 'approved'})
+                self.review(f'/review/{product_id}', data={'decision': 'approved'})
         self.assertEqual(self.path.read_bytes(), before)
         self.assertEqual(load_data(self.path)['reviews'], [])
 
@@ -121,7 +121,7 @@ class BookingTest(MarketCase):
         self.client.post(f'/edit/{product_id}', data={
             'title': '改价商品', 'description': '已调整', 'price': '19.00', 'action': 'resubmit'})
         self.login('admin', 'admin123')
-        self.client.post(f'/review/{product_id}', data={'decision': 'approved'})
+        self.review(f'/review/{product_id}', data={'decision': 'approved'})
         self.login('buyer', 'buyer123')
         response = self.client.post(f'/reserve/{product_id}', data=old)
         self.assertEqual(response.status_code, 409)

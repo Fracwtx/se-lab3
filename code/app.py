@@ -2,44 +2,20 @@
 import os
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from functools import wraps
 from uuid import uuid4
 
 from flask import Flask, abort, redirect, render_template, request, session, url_for
-from werkzeug.security import check_password_hash, generate_password_hash
 
+from accounts import current_role, register_account_routes, require_role
 from booking import (associated_reservation, find_booking_request, parse_booking_form,
                      process_booking, reservation_times)
 from catalog import register_catalog_routes
 from storage import DEFAULT_PATH, load_data, load_products, transaction
 
-ACCOUNTS = {
-    'user': {'password_hash': generate_password_hash('user123'), 'role': 'user'},
-    'buyer': {'password_hash': generate_password_hash('buyer123'), 'role': 'user'},
-    'other': {'password_hash': generate_password_hash('other123'), 'role': 'user'},
-    'admin': {'password_hash': generate_password_hash('admin123'), 'role': 'admin'},
-}
 STATUS_LABELS = {'draft': '草稿', 'pending': '待审核', 'approved': '已发布',
                  'reserved': '已预约', 'waiting': '待卖家确认',
                  'confirmed': '已确认', 'completed': '已完成',
                  'off_shelf': '已下架', 'cancelled': '已取消', 'rejected': '已拒绝', 'timed_out': '已超时'}
-
-
-def current_role():
-    """Resolve the trusted role from the server's preset accounts."""
-    return ACCOUNTS.get(session.get('username'), {}).get('role')
-
-
-def require_role(role):
-    """Reject unauthorized requests before executing a protected route."""
-    def decorate(function):
-        @wraps(function)
-        def guarded(*args, **kwargs):
-            if current_role() != role:
-                abort(403)
-            return function(*args, **kwargs)
-        return guarded
-    return decorate
 
 
 def validate_product(form, *, partial=False):
@@ -102,25 +78,6 @@ def create_app(data_path=None):
         return {'role': current_role(), 'status_labels': STATUS_LABELS,
                 'new_request_id': lambda: uuid4().hex}
 
-    @application.route('/login', methods=['GET', 'POST'])
-    def login():
-        """Authenticate a preset account; submitted roles are never trusted."""
-        if request.method == 'POST':
-            username = request.form.get('username', '')
-            account = ACCOUNTS.get(username)
-            if account and check_password_hash(account['password_hash'],
-                                               request.form.get('password', '')):
-                session.clear()
-                session['username'] = username
-                return redirect(url_for('public_list'))
-            return render_template('login.html', error='账号或密码错误'), 401
-        return render_template('login.html')
-
-    @application.post('/logout')
-    def logout():
-        session.clear()
-        return redirect(url_for('public_list'))
-
     @application.route('/submit', methods=['GET', 'POST'])
     @require_role('user')
     def submit_product():
@@ -148,6 +105,7 @@ def create_app(data_path=None):
         return render_template('products.html', heading='我的商品', products=[
             product for product in products if product['seller'] == session['username']])
 
+    register_account_routes(application)
     register_review_routes(application)
     register_catalog_routes(application)
     register_expiry_check(application)
@@ -179,6 +137,11 @@ def register_review_routes(application):
             product = find_record(data['products'], product_id)
             if product['status'] != 'pending':
                 abort(409, '该商品已处理，请刷新列表')
+            expected = request.form.get('expected_version', '')
+            if not expected.isascii() or not expected.isdecimal() or len(expected) > 10:
+                abort(400, '审核版本缺失或无效，请刷新页面')
+            if int(expected) != product['version']:
+                abort(409, '商品已撤回或修改后重新送审，请刷新页面再审核')
             product.update(status='draft' if decision == 'rejected' else 'approved',
                            reason=reason, reviewer=session['username'])
             reviewed_at = application.config['CLOCK']().isoformat()

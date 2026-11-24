@@ -36,7 +36,23 @@ PYLINTHOME=/tmp/se-lab3-pylint .venv/bin/python -m pylint code/*.py
 | 普通用户/另一买家 | other | other123 |
 | 管理员 | admin | admin123 |
 
-普通账号均可买卖。使用不同浏览器或无痕窗口演示多账号。
+普通账号均可买卖。使用不同浏览器或无痕窗口演示多账号。四个预置账号继续按上表登录；演示密码保持原样，新增注册账号适用下面的校验。
+
+## 普通用户注册与登录
+
+登录页提供“注册普通用户”入口，访问 `/register` 填写用户名、密码、昵称和联系方式；成功后跳转 `/login`，不会自动切换成新账号。
+字段依据实验一 REQ-001 和实验二 campus-market-ui.html 的注册原型：四项必填，密码至少8位，管理员不能通过注册创建。
+本地校验上限为用户名/昵称50字、联系方式200字、密码128位；用户名不能含空白，密码至少8位且不能全为空白。
+用户名、昵称和联系方式去除首尾空白；密码不裁剪。用户名按大小写精确比较，保留 user、buyer、other、admin 四个演示名。
+重复用户名返回409，非法字段返回400；登录失败统一返回“账号或密码错误”，不说明用户名是否存在。
+
+账号写入与已有业务数据共用 data.json，在同一 transaction 内查重并保存，因此并发注册同名最多成功一次。
+注册请求中的 role 被忽略，新增账号固定为普通用户；只有预置 admin 具有管理员身份。
+使用 Werkzeug generate_password_hash/check_password_hash，JSON 仅存 password_hash，不存明文密码。
+联系方式只保存，不在公开商品列表或详情展示；当前没有扩展联系方式的交易参与者展示功能。
+旧 JSON 没有 users 字段时默认空列表，演示账号仍可登录；新账号直接从 JSON 读取，重启后可继续登录。
+
+演示：退出当前账号 → 登录页点“注册普通用户” → 填写四项（例如 campus_student / student123）→ 注册后在登录页登录 → “我的商品”可用，“商品审核”返回403。昵称和联系方式请使用演示值。
 
 ## 功能与页面
 
@@ -45,6 +61,7 @@ PYLINTHOME=/tmp/se-lab3-pylint .venv/bin/python -m pylint code/*.py
 - `/products/<id>`：公开详情，仅已发布商品可见，其他状态即使管理员访问也返回404。
 - `/submit`、`/mine`、`/edit/<id>`：草稿允许缺字段但已填值须合法；完整送审。本人可撤回待审、编辑草稿；已发布商品修改后必须重新审核并立即停止公开。有有效预约时禁止编辑。
 - `/off-shelf/<id>`：本人可普通下架无有效预约的已发布商品；下架后列表和公开详情均隐藏。下架商品可保存修改（保持下架），也可重新送审，审核通过才重新公开；原审核历史保留。
+- `/register`、`/login`：普通用户注册及演示/持久账号登录。
 - `/admin`：管理员通过或驳回；驳回回草稿并保存原因。审核结果和追加历史在同一次保存中提交。
 - `/reviews`：管理员看全部审核历史；卖家只看本人商品。每条记录保存商品编号/标题快照、审核人、UTC时间、被审核版本、决定及原因，重审不覆盖历史。
 - 列表与详情上的预约表单明确显示价格；服务器同时提交隐藏的页面版本、确认价格和新动作标识。
@@ -82,7 +99,10 @@ PYTHONPATH=lab3/code /home/szmwtx27906/anaconda3/bin/python -m unittest test_lis
 
 标识按买家隔离，不同买家使用相同标识互不冲突。业务失败结果也持久保存；重放失败不会因商品后来恢复可售而自动成功。
 商品编辑及状态变化递增 version。预约快照记录的是买家确认的商品版本和价格。
-本轮版本输入校验针对预约；其他操作仍主要按身份与当前状态校验，尚未实现全部操作的预期版本协议。
+预约和管理员通过/驳回均校验页面版本。审核表单提交 expected_version，锁内先确认仍为待审核，再比对当前版本；缺失/非法返回400，版本不一致返回409并提示刷新，不更新商品、不追加历史。
+其他操作仍主要按身份与当前状态校验，尚未实现全部操作的预期版本协议。
+
+审核缺陷演示：管理员打开“商品审核”后保留旧页 → 另一会话用卖家撤回、改价、重新送审 → 原管理员页面点通过或驳回，得到409 → 刷新后看到新版商品，重新审核可正常完成。旧审核 POST 示例也必须补上从页面取得的 expected_version，不能由服务端自动用当前版本代替。
 
 ## 时间、存储与兼容
 
@@ -92,7 +112,7 @@ PYTHONPATH=lab3/code /home/szmwtx27906/anaconda3/bin/python -m unittest test_lis
 测试通过 app.config['CLOCK'] 注入带时区时间，不实际等待。
 
 默认文件是代码目录中的 data.json，与启动目录无关；MARKET_DATA_PATH 可覆盖（父目录须存在）。
-顶层保留 products、reservations，并新增 reviews、booking_requests。
+顶层保留 products、reservations、reviews、booking_requests，并兼容新增 users 账号列表。
 旧商品列表格式仍兼容，旧 rejected 作为 draft 读取，保留原因。
 旧商品缺少分类时默认为“其他”、缺版本时为1、缺发布时间时显示未知；保留已有值，下一次业务写入保存迁移后的完整文档。
 不捏造旧审核历史：原 reason/reviewer 仍保留，无法恢复的历史时间不补造；新审核开始追加完整记录。
@@ -105,11 +125,12 @@ PYTHONPATH=lab3/code /home/szmwtx27906/anaconda3/bin/python -m unittest test_lis
 
 ## 阅读顺序
 
-1. storage.py：load_data、transaction、_save_data，理解兼容和保存边界。
-2. catalog.py：parse_bound、query_products、paginate_products、register_catalog_routes；对应 products.html 的搜索表单和详情。
-3. app.py：has_active_reservation、take_off_shelf、edit_product；随后阅读 review_product、review_history；对应 reviews.html。
-4. booking.py：parse_booking_form、booking_decision、process_booking、associated_reservation，理解参数规范化、首次结果和重放。
-5. app.py：reserve_product、booking_result、expire_reservations、transition_reservation；对应 products.html、booking_result.html、reservations.html。
+1. accounts.py：validate_registration、register、find_account、current_role、login；理解注册查重、密码哈希和普通用户角色。
+2. storage.py：load_data、transaction、_save_data，理解兼容和保存边界。
+3. catalog.py：parse_bound、query_products、paginate_products、register_catalog_routes；对应 products.html 的搜索表单和详情。
+4. app.py：has_active_reservation、take_off_shelf、edit_product；随后阅读 review_product、review_history；对应 reviews.html。
+5. booking.py：parse_booking_form、booking_decision、process_booking、associated_reservation，理解参数规范化、首次结果和重放。
+6. app.py：reserve_product、booking_result、expire_reservations、transition_reservation；对应 products.html、booking_result.html、reservations.html。
 
 ## 验证
 
@@ -120,18 +141,18 @@ PYTHONPATH=lab3/code /home/szmwtx27906/anaconda3/bin/python -m unittest test_lis
 PYLINTHOME=/tmp/se-lab3-pylint /home/szmwtx27906/anaconda3/bin/python -m pylint lab3/code/*.py
 ```
 
-此前搜索/历史/预约协议27项回归继续保留；本轮新增5项，下架及分页专项通过，全量32项测试通过。
+原32项回归继续保留并补上审核表单版本；审核修复完成后33项通过，注册实现后全量36项通过。新增测试覆盖旧审核页面的完整操作链、注册登录、重复/保留用户名、并发注册、新账号权限及独立进程重启后登录。
 最终 Pylint 退出码0，10.00/10。测试使用临时数据，不污染演示文件。
 原预约测试补上正式表单参数；超时后的旧页面先得到版本失效，再刷新确认成功。
 本轮还通过真实 HTTP 检查搜索、隐藏详情、历史权限、页面隐藏字段、预约重放及服务进程重启后的原结果读取。
-本轮下架及分页通过 Flask 测试客户端验证；真实 HTTP 检查记录来自上一轮。浏览器视觉和点击交互尚未验证。
+本轮另以独立临时 JSON 和随机本地端口通过真实 HTTP 检查注册、登录、普通用户权限及旧/当前审核表单；服务和数据已清理。浏览器视觉和点击交互尚未验证。
 
 ## 剩余范围
 
 本轮完成 REQ-007 普通下架与重新送审、REQ-010 稳定20条分页。REQ-010 的图片/封面、地点字段仍未实现，不能据此宣称该条全部覆盖。
 其他剩余范围：终止申请及审批、违规处置及解除、完整日志与通知，以及此前说明的全操作版本协议。
 实验说明未明确测试、HTML/CSS、空行和复用代码的计入规则，需确认；不以扩行代替需求实现。
-已初始化 lab3 本地 Git 仓库（main）；本地提交及工作区状态以 git log、git status 为准，尚未配置远程；远程地址由用户提供。实验报告由学生独立撰写。
+已初始化 lab3 本地 Git 仓库（main）；本地提交及工作区状态以 git log、git status 为准，远程配置以 git remote -v 为准。实验报告由学生独立撰写。
 
 ## 本轮行数
 
@@ -139,15 +160,15 @@ PYLINTHOME=/tmp/se-lab3-pylint /home/szmwtx27906/anaconda3/bin/python -m pylint 
 
 | 类别 | 物理行（含空行） | 非空行 |
 | --- | ---: | ---: |
-| Python 实现 | 655 | 567 |
-| Python 测试 | 899 | 801 |
-| HTML/Jinja | 101 | 101 |
+| Python 实现 | 717 | 620 |
+| Python 测试 | 1041 | 927 |
+| HTML/Jinja | 113 | 113 |
 | CSS | 4 | 4 |
-| 合计 | 1659 | 1473 |
+| 合计 | 1875 | 1664 |
 
-Python实现为 app.py 401、storage.py 68、catalog.py 92、booking.py 94；测试为 test_app.py 500、test_features.py 227、test_listing.py 172。
+当前分项为：accounts.py 98行；app.py 364行；booking.py 94行；catalog.py 92行；storage.py 69行；test_accounts.py 134行；test_app.py 508行；test_features.py 227行；test_listing.py 172行。
 style.css 1行直接复用实验二原型，forms.css 3行沿用此前实现；HTML/Jinja沿用原型结构扩展。
-未发现 GUI 工具自动生成代码。上述合计不代表已确认的合规统计口径。物理行总数1659超过1500，但包含测试、模板、样式、空行及复用代码；非空总数1473、Python实现655均不足1501，需课程明确口径后再判断是否达标。
+未发现 GUI 工具自动生成代码。物理行总数1875、非空总数1664均含测试和界面，不能自动视为课程认可的实现行数；需确认统计口径。
 
 
 ## 提交前验收与打包边界
@@ -160,10 +181,10 @@ style.css 1行直接复用实验二原型，forms.css 3行沿用此前实现；H
 - 四个演示账号均能登录，样式资源返回200。验收服务器已停止，临时数据已清理，code/data.json 未用于验收。
 
 浏览器控制返回 `The browser access host is unavailable`，故未完成真实浏览器点击、布局、键盘和视觉验收，不能将上述 HTTP 检查称为浏览器验收。
-本轮原环境及独立 Python 3.12 新安装环境均全量32项测试通过，Pylint均10.00/10、退出码0；新环境 pip check 无依赖冲突。
+初次提交前的验收记录：原环境及独立 Python 3.12 新安装环境均32项通过，Pylint均10.00/10；本轮注册与审核修复后的最新回归为上文36项。
 
 lab3/UML 已准备实验二原始设计快照（7份 puml + 7份 PNG），保留实现差异说明；不能把它当作全部功能均已实现的证明。
-提交包须使用以下结构；实验报告尚未提供，因此本轮不生成最终 ZIP：
+提交包须使用以下结构；实验报告由你自行核对，本轮不生成最终 ZIP：
 
 ```text
 实验3_学号_姓名/
@@ -192,4 +213,4 @@ git archive --format=zip --prefix=实验3_学号_姓名/ -o /tmp/实验3_学号_
 ```
 
 第一条确认报告已经进入提交；失败时先补齐报告再执行归档。归档只含已提交内容，需检查报告、code 和 UML 都已提交，且未强行纳入忽略文件。
-还需提供远程地址、完成实际 commit/push 并核对远程记录。课程行数口径待确认；本README保留分类统计，不将1659个总物理行直接认定为合规达标。
+还需提供远程地址、完成实际 commit/push 并核对远程记录。课程行数口径待确认；本README保留分类统计，不将包含测试和界面的总物理行直接认定为合规达标。

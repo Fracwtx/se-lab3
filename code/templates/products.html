@@ -16,6 +16,7 @@
 {% if product.reason %}<p>审核意见：{{ product.reason }}</p>{% endif %}
 {% if review %}<p>卖家：{{ product.seller }}</p>
 <form method="post" action="{{ url_for('review_product', product_id=product.id) }}">
+<input type="hidden" name="expected_version" value="{{ product.version }}">
 <label>驳回原因（驳回时必填）<textarea name="reason" maxlength="500" rows="2"></textarea></label>
 <button class="btn primary" name="decision" value="approved">通过</button>
 <button class="btn secondary" name="decision" value="rejected">驳回</button></form>{% endif %}
