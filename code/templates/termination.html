@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% block content %}
+<h1>核实终止申请</h1><article class="panel"><h2>{{ reservation.title }}</h2><p>申请理由：{{ application.request_reason }}</p>
+<p>买家：{{ reservation.buyer }} · 联系方式：{{ contacts.buyer }}</p><p>卖家：{{ reservation.seller }} · 联系方式：{{ contacts.seller }}</p>
+<p>请线下联系双方核实。勾选代表管理员已核实，不代表系统自动取得参与者同意。</p>
+<form method="post"><input type="hidden" name="expected_version" value="{{ product.version }}">
+<label>买家意见<textarea name="buyer_opinion" required maxlength="500"></textarea></label><label><input type="checkbox" name="buyer_agreed" value="yes">已核实买家同意</label>
+<label>卖家意见<textarea name="seller_opinion" required maxlength="500"></textarea></label><label><input type="checkbox" name="seller_agreed" value="yes">已核实卖家同意</label>
+<label>处理原因<textarea name="reason" required maxlength="500"></textarea></label><button class="btn primary" name="decision" value="approved">批准终止并普通下架</button><button class="btn secondary" name="decision" value="rejected">驳回，保持已确认</button></form></article>
+{% endblock %}

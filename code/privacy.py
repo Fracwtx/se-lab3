@@ -43,7 +43,9 @@ def register_contact_routes(application):
     @require_role('user')
     def my_reservations():
         data = load_data(application.config['DATA_PATH'])
-        records = [{**item, 'counterparty_contact': counterparty_contact(
+        records = [{**item, 'expected_version': next(product['version']
+                    for product in data['products'] if product['id'] == item['product_id']),
+                    'counterparty_contact': counterparty_contact(
             data, item, session['username'])} for item in data['reservations']
                    if session['username'] in (item['seller'], item['buyer'])]
         return private_response(render_template('reservations.html', reservations=records))

@@ -104,11 +104,11 @@ class ReviewHistoryTest(MarketCase):
         self.login('user', 'user123')
         product_id = self.submit('故障审核')
         self.login('admin', 'admin123')
-        before = self.path.read_bytes()
+        before = self.business_bytes()
         with patch('storage.os.replace', side_effect=OSError('disk failure')):
             with self.assertRaises(OSError):
                 self.review(f'/review/{product_id}', data={'decision': 'approved'})
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.business_bytes(), before)
         self.assertEqual(load_data(self.path)['reviews'], [])
 
 
@@ -204,7 +204,7 @@ class BookingTest(MarketCase):
         self.login('buyer', 'buyer123')
         self.assertEqual(self.client.post(f'/reserve/{product_id}', data={
             **form, 'expected_price': '88.00'}).status_code, 409)
-        fresh = create_app(self.path).test_client()
+        fresh = create_app(self.path, notification_worker=False).test_client()
         fresh.post('/login', data={'username': 'buyer', 'password': 'buyer123'})
         self.assertEqual(fresh.post(f'/reserve/{product_id}', data=form).status_code, 302)
         self.assertEqual(len(load_data(self.path)['reservations']), 1)
@@ -218,11 +218,11 @@ class BookingTest(MarketCase):
             invalid = {name: value for name, value in form.items() if name != field}
             self.assertEqual(self.client.post(f'/reserve/{product_id}',
                                              data=invalid).status_code, 400)
-        before = self.path.read_bytes()
+        before = self.business_bytes()
         with patch('storage.os.replace', side_effect=OSError('disk failure')):
             with self.assertRaises(OSError):
                 self.client.post(f'/reserve/{product_id}', data=form)
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.business_bytes(), before)
         self.assertEqual(self.client.post(f'/reserve/{product_id}', data=form).status_code, 302)
 
 

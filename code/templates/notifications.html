@@ -1,0 +1,2 @@
+{% extends 'base.html' %}{% block content %}<h1>我的站内通知</h1>
+{% for item in notifications %}<article class="panel"><p>{{ item.content|default(item.event) }} · 对象 {{ item.subject_id }}</p><p>发送时间 {{ item.sent_at }} · {{ '已读' if item.read_at else '未读' }}</p>{% if not item.read_at %}<form method="post" action="{{ url_for('read_notification', notification_id=item.id) }}"><button class="btn secondary">标记已读</button></form>{% endif %}</article>{% else %}<p>暂无通知。</p>{% endfor %}{% endblock %}

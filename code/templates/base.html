@@ -6,8 +6,8 @@
 <body><div class="app">
 <header><a class="wordmark" href="{{ url_for('public_list') }}"><span class="brand-icon">↗</span>校园集<span class="brand-sub">让闲置，继续被喜欢。</span></a>
 <nav class="header-right"><a href="{{ url_for('public_list') }}">公开列表</a>
-{% if role == 'user' %}<a href="{{ url_for('submit_product') }}">提交商品</a><a href="{{ url_for('my_products') }}">我的商品</a><a href="{{ url_for('my_reservations') }}">我的交易</a>{% endif %}
-{% if role == 'admin' %}<a href="{{ url_for('review_queue') }}">商品审核</a>{% endif %}
+{% if role == 'user' %}<a href="{{ url_for('submit_product') }}">提交商品</a><a href="{{ url_for('my_products') }}">我的商品</a><a href="{{ url_for('my_reservations') }}">我的交易</a><a href="{{ url_for('my_notifications') }}">我的通知</a>{% endif %}
+{% if role == 'admin' %}<a href="{{ url_for('review_queue') }}">商品审核</a><a href="{{ url_for('termination_queue') }}">终止审批</a><a href="{{ url_for('moderation_queue') }}">违规处置</a><a href="{{ url_for('operation_logs') }}">操作日志</a>{% endif %}
 {% if role %}<a href="{{ url_for('review_history') }}">审核历史</a><span>{{ session.username }}</span><form method="post" action="{{ url_for('logout') }}"><button class="btn secondary">退出</button></form>
 {% else %}<a href="{{ url_for('login') }}">登录</a>{% endif %}</nav></header>
 <main>{% if error %}<p class="notice" role="alert">{{ error }}</p>{% endif %}{% block content %}{% endblock %}</main>

@@ -19,3 +19,12 @@ __pycache__/
 
 # Uploaded product images are runtime data, served only through guarded routes
 /code/uploads/
+
+# LaTeX report build artifacts (report PDF/source are reviewed separately)
+*.aux
+*.toc
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+*.out
+*.xdv

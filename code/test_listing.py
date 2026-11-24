@@ -75,17 +75,17 @@ class OffShelfTest(MarketCase):
         for username in (None, 'buyer', 'admin'):
             if username:
                 self.login(username, username + '123')
-            before = self.path.read_bytes()
+            before = self.business_bytes()
             self.assertEqual(self.client.post('/off-shelf/' + product_id).status_code, 403)
-            self.assertEqual(self.path.read_bytes(), before)
+            self.assertEqual(self.business_bytes(), before)
         self.login('user', 'user123')
         for status in ('draft', 'pending', 'reserved', 'confirmed', 'completed', 'violation'):
             with self.subTest(status=status):
                 with transaction(self.path) as data:
                     data['products'][0]['status'] = status
-                before = self.path.read_bytes()
+                before = self.business_bytes()
                 self.assertEqual(self.client.post('/off-shelf/' + product_id).status_code, 409)
-                self.assertEqual(self.path.read_bytes(), before)
+                self.assertEqual(self.business_bytes(), before)
                 if status in ('completed', 'violation'):
                     self.assertEqual(self.client.post('/edit/' + product_id, data={
                         'action': 'resubmit'}).status_code, 409)
@@ -101,9 +101,9 @@ class OffShelfTest(MarketCase):
         # Check the active-reservation guard independently of the product-status guard.
         with transaction(self.path) as data:
             data['products'][0]['status'] = 'approved'
-        before = self.path.read_bytes()
+        before = self.business_bytes()
         self.assertEqual(self.client.post('/off-shelf/' + product_id).status_code, 409)
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.business_bytes(), before)
 
 
 class PaginationTest(MarketCase):

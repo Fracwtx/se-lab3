@@ -4,7 +4,7 @@ from decimal import Decimal
 import re
 from uuid import uuid4
 
-from flask import abort
+from flask import abort, g
 
 from catalog import parse_bound
 
@@ -48,7 +48,7 @@ def booking_decision(data, buyer, content):
                    and item['status'] in ('waiting', 'confirmed')), None)
     if active and active['buyer'] == buyer:
         return 'existing', '已有有效预约，沿用原预约。', 302, active
-    if active or product['status'] != 'approved':
+    if active or product['status'] != 'approved' or product.get('violation_active'):
         return 'unavailable', '商品已被预约或当前不可售，请刷新列表。', 409, None
     if (product['version'] != content['expected_version']
             or Decimal(product['price']) != Decimal(content['expected_price'])):
@@ -67,6 +67,7 @@ def process_booking(data, buyer, request_id, content, now):
     if previous is not None:
         if previous['content'] != content:
             abort(409, '相同请求标识携带不同内容；请保留原请求，新动作使用新标识。')
+        g.booking_replay = True
         return previous
     code, message, status, reservation = booking_decision(data, buyer, content)
     if code == 'created':

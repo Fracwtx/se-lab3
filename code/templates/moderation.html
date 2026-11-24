@@ -1,0 +1,6 @@
+{% extends 'base.html' %}{% block content %}<h1>违规处置影响范围</h1>
+<article class="panel"><h2>{{ product.title or '未命名草稿' }}</h2><p>商品编号：{{ product.id }} · 卖家：{{ product.seller }} · 状态：{{ status_labels[product.status] }} · 版本：{{ product.version }}</p><p>{{ product.description }} · ¥ {{ product.price }} · {{ product.delivery_location or '未填写' }}</p>
+{% if product.status == 'completed' %}<p>保留完成状态及交易历史，仅隐藏内容并追加违规记录；解除也不能重新销售。</p>{% else %}<p>违规处置会隐藏商品，同步终止有效预约并关闭待处理终止申请。解除后仅为普通下架，须重新送审。</p>{% endif %}
+<h2>关联预约与历史</h2>{% for item in reservations %}<p>{{ item.id }} · {{ status_labels[item.status] }} · {{ item.title }} · ¥ {{ item.price }} · 卖家 {{ item.seller }} / 买家 {{ item.buyer }}</p>{% if item.id in contacts %}<p>处置核实专用：卖家联系方式 {{ contacts[item.id].seller }} · 买家联系方式 {{ contacts[item.id].buyer }}</p>{% endif %}{% else %}<p>没有关联预约。</p>{% endfor %}
+<form method="post"><input type="hidden" name="expected_version" value="{{ product.version }}"><input type="hidden" name="snapshot" value="{{ snapshot }}"><label>处置 / 解除原因<textarea name="reason" required maxlength="500"></textarea></label>
+<button class="btn primary" name="action" value="restrict">确认违规并限制</button>{% if product.violation_active %}<button class="btn secondary" name="action" value="release">解除限制，保持不公开</button>{% endif %}</form></article>{% endblock %}

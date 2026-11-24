@@ -1,0 +1,3 @@
+{% extends 'base.html' %}{% block content %}<h1>违规处置与解除限制</h1>
+{% for item in products %}<article class="panel"><p>{{ item.title or '未命名草稿' }} · {{ status_labels[item.status] }}{% if item.violation_active %} · 违规限制中{% endif %}</p><a href="{{ url_for('moderate_product', product_id=item.id) }}">预览影响范围 / 处置</a></article>{% endfor %}
+<h2>处理历史</h2>{% for event in events %}<article class="panel"><p>{{ event.product_id }} · {{ event.action }} · {{ event.actor }} · {{ event.at }}</p><p>{{ event.reason }}</p></article>{% else %}<p>暂无记录。</p>{% endfor %}{% endblock %}

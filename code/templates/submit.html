@@ -1,6 +1,6 @@
 {% extends 'base.html' %}{% block content %}{% set fields = request.form if request.method == 'POST' else values|default({}) %}
 <h1>{{ "编辑商品" if editing else "提交商品" }}</h1><p>提交后进入待审核状态，审核通过后才会公开展示。</p>
-<form method="post" class="panel" enctype="multipart/form-data">
+<form method="post" class="panel" enctype="multipart/form-data">{% if editing %}<input type="hidden" name="expected_version" value="{{ values.version }}">{% endif %}
 {% set saved = values|default({}) %}
 <label>标题<input name="title" required maxlength="100" value="{{ fields.get('title', '') }}"></label>
 <label>描述<textarea name="description" required maxlength="2000" rows="6">{{ fields.get('description', '') }}</textarea></label>

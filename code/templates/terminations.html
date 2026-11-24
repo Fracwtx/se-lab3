@@ -1,0 +1,5 @@
+{% extends 'base.html' %}{% block content %}
+<h1>交易终止申请与历史</h1>
+{% for item in applications %}<article class="panel"><p>预约：{{ item.reservation_id }} · 申请人：{{ item.applicant }} · 状态：{{ item.status }}</p><p>申请理由：{{ item.request_reason }}</p>
+{% if item.status == 'pending' %}<a href="{{ url_for('handle_termination', application_id=item.id) }}">领取处置并核实双方意见</a>{% else %}<p>处理人：{{ item.handler }} · 原因：{{ item.reason }}</p><p>买家意见：{{ item.buyer_opinion|default('') }} · 卖家意见：{{ item.seller_opinion|default('') }}</p>{% endif %}</article>{% else %}<p>暂无申请。</p>{% endfor %}
+{% endblock %}

@@ -28,9 +28,9 @@
 {% if role == 'user' and product.seller == session.username and product.status in ('draft', 'approved', 'off_shelf') %}
 <a class="btn secondary" href="{{ url_for('edit_product', product_id=product.id) }}">编辑 / 重新送审</a>{% endif %}
 {% if role == 'user' and product.seller == session.username and product.status == 'approved' %}
-<form method="post" action="{{ url_for('take_off_shelf', product_id=product.id) }}"><button class="btn secondary">普通下架</button></form>{% endif %}
+<form method="post" action="{{ url_for('take_off_shelf', product_id=product.id) }}"><input type="hidden" name="expected_version" value="{{ product.version }}"><button class="btn secondary">普通下架</button></form>{% endif %}
 {% if role == 'user' and product.seller == session.username and product.status == 'pending' %}
-<form method="post" action="{{ url_for('withdraw_product', product_id=product.id) }}"><button class="btn secondary">撤回审核</button></form>{% endif %}
+<form method="post" action="{{ url_for('withdraw_product', product_id=product.id) }}"><input type="hidden" name="expected_version" value="{{ product.version }}"><button class="btn secondary">撤回审核</button></form>{% endif %}
 {% if role == 'user' and product.seller != session.username and product.status == 'approved' %}
 <form method="post" action="{{ url_for('reserve_product', product_id=product.id) }}"><input type="hidden" name="request_id" value="{{ new_request_id() }}">
 <input type="hidden" name="expected_version" value="{{ product.version }}"><input type="hidden" name="expected_price" value="{{ product.price }}"><button class="btn primary">按 ¥ {{ product.price }} 预约</button></form>{% endif %}

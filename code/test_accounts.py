@@ -33,12 +33,12 @@ class ReviewVersionTest(MarketCase):
                     'title': '审核版本商品', 'description': '改价后重新审核',
                     'price': '19.00', 'action': 'resubmit'})
                 self.login('admin', 'admin123')
-                before = self.path.read_bytes()
+                before = self.business_bytes()
                 response = self.client.post('/review/' + product_id, data={
                     'decision': decision, 'reason': '审核意见', 'expected_version': old_version})
                 self.assertEqual(response.status_code, 409)
                 self.assertIn('刷新', response.get_data(as_text=True))
-                self.assertEqual(self.path.read_bytes(), before)
+                self.assertEqual(self.business_bytes(), before)
                 data = load_data(self.path)
                 self.assertEqual(data['products'][-1]['status'], 'pending')
                 self.assertEqual(data['products'][-1]['price'], '19.00')
@@ -98,7 +98,7 @@ class RegistrationTest(MarketCase):
     def test_duplicate_reserved_names_and_validation(self):
         """Reserved demo usernames and malformed/short fields never create accounts."""
         self.assertEqual(self.registration().status_code, 302)
-        before = self.path.read_bytes()
+        before = self.business_bytes()
         self.assertEqual(self.registration().status_code, 409)
         for name in ('user', 'buyer', 'other', 'admin', ' new_student '):
             self.assertEqual(self.registration(username=name).status_code, 409)
@@ -107,7 +107,7 @@ class RegistrationTest(MarketCase):
                        {'contact_info': ''}, {'contact_info': 'x' * 201}):
             with self.subTest(fields=fields):
                 self.assertEqual(self.registration(**fields).status_code, 400)
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.business_bytes(), before)
         unknown = self.login('missing_user', 'wrong').get_data(as_text=True)
         wrong = self.login('new_student', 'wrong').get_data(as_text=True)
         self.assertEqual(unknown, wrong)

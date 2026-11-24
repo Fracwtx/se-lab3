@@ -7,11 +7,12 @@
 {% if item.counterparty_contact is not none %}<p>对方联系方式：{{ item.counterparty_contact }}</p>{% endif %}
 {% if item.reason %}<p>处理原因：{{ item.reason }}</p>{% endif %}
 {% if item.buyer == session.username and item.status == 'waiting' %}
-<form method="post" action="{{ url_for('cancel_reservation', reservation_id=item.id) }}"><button class="btn secondary">取消预约</button></form>{% endif %}
+<form method="post" action="{{ url_for('cancel_reservation', reservation_id=item.id) }}"><input type="hidden" name="expected_version" value="{{ item.expected_version }}"><button class="btn secondary">取消预约</button></form>{% endif %}
 {% if item.seller == session.username and item.status == 'waiting' %}
-<form method="post" action="{{ url_for('confirm_reservation', reservation_id=item.id) }}"><button class="btn primary">确认预约</button></form>
-<form method="post" action="{{ url_for('reject_reservation', reservation_id=item.id) }}"><label>拒绝原因<textarea name="reason" required maxlength="500" rows="2"></textarea></label><button class="btn secondary">拒绝预约</button></form>{% endif %}
+<form method="post" action="{{ url_for('confirm_reservation', reservation_id=item.id) }}"><input type="hidden" name="expected_version" value="{{ item.expected_version }}"><button class="btn primary">确认预约</button></form>
+<form method="post" action="{{ url_for('reject_reservation', reservation_id=item.id) }}"><input type="hidden" name="expected_version" value="{{ item.expected_version }}"><label>拒绝原因<textarea name="reason" required maxlength="500" rows="2"></textarea></label><button class="btn secondary">拒绝预约</button></form>{% endif %}
 {% if item.buyer == session.username and item.status == 'confirmed' %}
-<form method="post" action="{{ url_for('complete_reservation', reservation_id=item.id) }}"><button class="btn primary">已收货，确认完成</button></form>{% endif %}
+<form method="post" action="{{ url_for('complete_reservation', reservation_id=item.id) }}"><input type="hidden" name="expected_version" value="{{ item.expected_version }}"><button class="btn primary">已收货，确认完成</button></form>{% endif %}
+{% if item.status == 'confirmed' %}<form method="post" action="{{ url_for('request_termination', reservation_id=item.id) }}"><input type="hidden" name="expected_version" value="{{ item.expected_version }}"><label>终止申请理由<textarea name="reason" required maxlength="500"></textarea></label><button class="btn secondary">申请终止交易</button></form>{% endif %}
 </article>{% else %}<p>暂无交易。</p>{% endfor %}
 {% endblock %}

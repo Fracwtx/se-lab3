@@ -14,8 +14,10 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from PIL import Image
+from flask.testing import FlaskClient
 
 from app import create_app
+from notifications import deliver_pending
 from storage import load_data, load_products, transaction
 
 
@@ -27,6 +29,31 @@ def image_upload(filename='product.png', color='green'):
     return stream, filename
 
 
+class FreshFormClient(FlaskClient):
+    """Legacy fixtures emulate current forms; explicit versions are never replaced."""
+
+    def post(self, *args, **kwargs):
+        path = args[0] if args else kwargs.get('path', '/')
+        prefixes = ('/edit/', '/withdraw/', '/off-shelf/', '/cancel/', '/reject/',
+                    '/confirm/', '/complete/', '/reservations/')
+        if path.startswith(prefixes):
+            fields = kwargs.get('data') or {}
+            if isinstance(fields, dict) and 'expected_version' not in fields:
+                data = load_data(self.application.config['DATA_PATH'])
+                identifier = path.split('/')[2]
+                if path.startswith(('/cancel/', '/reject/', '/confirm/', '/complete/',
+                                    '/reservations/')):
+                    reservation = next((item for item in data['reservations']
+                                        if item['id'] == identifier), {})
+                    identifier = reservation.get('product_id')
+                product = next((item for item in data['products'] if item['id'] == identifier), {})
+                kwargs['data'] = {'expected_version': str(product.get('version', 1)), **fields}
+        response = super().post(*args, **kwargs)
+        if not self.application.config['NOTIFICATION_WORKER']:
+            deliver_pending(self.application)  # Deterministic fixture; production uses the worker.
+        return response
+
+
 class MarketCase(unittest.TestCase):
     """Shared temporary storage, login and product/reservation setup."""
 
@@ -34,9 +61,23 @@ class MarketCase(unittest.TestCase):
         directory = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, directory)
         self.path = Path(directory) / 'data.json'
-        self.app = create_app(self.path)
+        self.app = create_app(self.path, notification_worker=False)
         self.app.config.update(TESTING=True)
+        self.app.test_client_class = FreshFormClient
+        self.addCleanup(self.app.extensions['notification_worker'].stop)
         self.client = self.app.test_client()
+
+
+    def business_bytes(self):
+        """Compare full persisted business data while allowing append-only failure logs."""
+        data = load_data(self.path)
+        data.pop('operation_logs', None)
+        data.pop('inbox', None)
+        for item in data['notifications']:
+            for key in ('attempts', 'sent_at', 'last_error'):
+                item.pop(key, None)
+            item['status'] = 'pending'
+        return json.dumps(data, sort_keys=True).encode()
 
 
     def login(self, username, password):
@@ -114,7 +155,7 @@ class ProductTest(MarketCase):
         self.assertEqual(self.review(f'/review/{approved_id}',
                                          data={'decision': 'rejected',
                                                'reason': '重复处理'}).status_code, 409)
-        fresh_client = create_app(self.path).test_client()
+        fresh_client = create_app(self.path, notification_worker=False).test_client()
         page = fresh_client.get('/').get_data(as_text=True)
         self.assertIn('通过商品', page)
         self.assertNotIn('驳回商品', page)
@@ -185,10 +226,10 @@ class ProductTest(MarketCase):
         self.assertEqual(self.client.post(f'/complete/{reservation_id}').status_code, 409)
         self.assertEqual(self.client.post(f'/confirm/{reservation_id}').status_code, 403)
         self.login('other', 'other123')
-        before = self.path.read_bytes()
+        before = self.business_bytes()
         for action in ('confirm', 'complete'):
             self.assertEqual(self.client.post(f'/{action}/{reservation_id}').status_code, 403)
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.business_bytes(), before)
         self.assertNotIn('交易商品', self.client.get('/reservations').get_data(as_text=True))
         self.login('user', 'user123')
         self.assertEqual(self.client.post(f'/confirm/{reservation_id}').status_code, 302)
@@ -200,7 +241,7 @@ class ProductTest(MarketCase):
         data = load_data(self.path)
         self.assertEqual(data['products'][0]['status'], 'completed')
         self.assertEqual(data['reservations'][0]['status'], 'completed')
-        fresh = create_app(self.path).test_client()
+        fresh = create_app(self.path, notification_worker=False).test_client()
         fresh.post('/login', data={'username': 'buyer', 'password': 'buyer123'})
         self.assertIn('已完成', fresh.get('/reservations').get_data(as_text=True))
         self.assertNotIn('交易商品', fresh.get('/').get_data(as_text=True))
@@ -259,14 +300,14 @@ class ProductTest(MarketCase):
     def test_atomic_save_failure(self):
         """A failed replacement cannot partially commit either business record."""
         self.publish()
-        before = self.path.read_bytes()
+        before = self.business_bytes()
         directory_before = set(self.path.parent.iterdir())
         with patch('storage.os.replace', side_effect=OSError('disk failure')):
             with self.assertRaises(OSError):
                 with transaction(self.path) as data:
                     data['products'][0]['status'] = 'reserved'
                     data['reservations'].append({'id': 'unsaved'})
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.business_bytes(), before)
         self.assertEqual(set(self.path.parent.iterdir()), directory_before)
 
 
@@ -295,10 +336,10 @@ class ProductTest(MarketCase):
         self.assertEqual((product['status'], product['price']), ('draft', ''))
         product_id = product['id']
         self.assertNotIn('未完成', self.client.get('/').get_data(as_text=True))
-        before = self.path.read_bytes()
+        before = self.business_bytes()
         self.assertEqual(self.client.post(f'/edit/{product_id}', data={
             'title': '未完成', 'action': 'resubmit'}).status_code, 400)
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.business_bytes(), before)
         for price in ('-1', 'abc', 'NaN'):
             self.assertEqual(self.client.post('/submit', data={
                 'price': price, 'action': 'save'}).status_code, 400)
@@ -350,10 +391,10 @@ class ProductTest(MarketCase):
         self.login('buyer', 'buyer123')
         self.reserve(product_id)
         self.login('user', 'user123')
-        before = self.path.read_bytes()
+        before = self.business_bytes()
         self.assertEqual(self.client.get(f'/edit/{product_id}').status_code, 409)
         self.assertEqual(self.client.post(f'/edit/{product_id}', data=fields).status_code, 409)
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.business_bytes(), before)
         reservation_id = load_data(self.path)['reservations'][0]['id']
         self.client.post(f'/confirm/{reservation_id}')
         self.assertEqual(self.client.post(f'/edit/{product_id}', data=fields).status_code, 409)
@@ -390,10 +431,10 @@ class ReservationTest(MarketCase):
                 payload = {'reason': '不方便交易'}
                 for stranger in ('other', 'admin', 'user' if action == 'cancel' else 'buyer'):
                     self.login(stranger, stranger + '123')
-                    before = self.path.read_bytes()
+                    before = self.business_bytes()
                     self.assertEqual(self.client.post(f'/{action}/{reservation_id}',
                                                       data=payload).status_code, 403)
-                    self.assertEqual(self.path.read_bytes(), before)
+                    self.assertEqual(self.business_bytes(), before)
                 self.login(username, username + '123')
                 if action == 'reject':
                     self.assertEqual(self.client.post(f'/{action}/{reservation_id}',
@@ -461,9 +502,9 @@ class ReservationTest(MarketCase):
                 product = next(item for item in data['products'] if item['id'] == product_id)
                 self.assertEqual(product['status'], 'reserved' if trigger == 'reserve'
                                  else 'approved')
-                before = self.path.read_bytes()
+                before = self.business_bytes()
                 self.client.get('/reservations')
-                self.assertEqual(self.path.read_bytes(), before)
+                self.assertEqual(self.business_bytes(), before)
 
 
     def test_confirmed_cannot_cancel_reject_or_timeout(self):
@@ -516,11 +557,11 @@ class ReservationTest(MarketCase):
     def test_failed_cancel_save_preserves_both_records(self):
         """Disk replacement failure cannot release the product without ending its reservation."""
         _, reservation = self.waiting_reservation()
-        before = self.path.read_bytes()
+        before = self.business_bytes()
         with patch('storage.os.replace', side_effect=OSError('disk failure')):
             with self.assertRaises(OSError):
                 self.client.post(f"/cancel/{reservation['id']}")
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.business_bytes(), before)
 
 
 if __name__ == '__main__':

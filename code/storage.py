@@ -7,6 +7,8 @@ from pathlib import Path
 import tempfile
 from threading import RLock
 
+from eventlog import journal_changes, save_failure_metadata
+
 STORAGE_LOCK = RLock()
 DEFAULT_PATH = Path(__file__).with_name('data.json')
 
@@ -22,10 +24,14 @@ def load_data(path=DEFAULT_PATH):
         if isinstance(data, list):
             data = {'products': data, 'reservations': []}
         data.setdefault('users', [])
+        for key in ('termination_requests', 'termination_events',
+                    'notifications', 'moderation_events', 'operation_logs', 'inbox'):
+            data.setdefault(key, [])
         data.setdefault('reviews', [])
         data.setdefault('booking_requests', [])
         for product in data['products']:
             product.setdefault('version', 1)
+            product.setdefault('violation_active', product['status'] == 'violation')
             product.setdefault('category', '其他')
             product.setdefault('delivery_location', '')
             product.setdefault('published_at', '')
@@ -69,4 +75,9 @@ def transaction(path=DEFAULT_PATH):
         original = deepcopy(data)
         yield data
         if data != original:
-            _save_data(data, path)
+            journal_changes(data, original)
+            try:
+                _save_data(data, path)
+            except OSError:
+                save_failure_metadata(original, path, data, _save_data)
+                raise

@@ -12,13 +12,18 @@ from booking import (associated_reservation, find_booking_request, parse_booking
                      process_booking, reservation_times)
 from catalog import register_catalog_routes
 from images import new_image_files, register_image_routes, stage_product_images
+from moderation import register_moderation_routes
+from notifications import register_notification_routes
+from operations import check_version, register_failure_logging, register_log_routes
 from privacy import register_contact_routes
+from termination import close_on_completion, register_termination_routes
 from storage import DEFAULT_PATH, load_data, load_products, transaction
 
 STATUS_LABELS = {'draft': '草稿', 'pending': '待审核', 'approved': '已发布',
                  'reserved': '已预约', 'waiting': '待卖家确认',
                  'confirmed': '已确认', 'completed': '已完成',
-                 'off_shelf': '已下架', 'cancelled': '已取消', 'rejected': '已拒绝', 'timed_out': '已超时'}
+                 'violation': '违规下架', 'terminated': '已终止', 'off_shelf': '已下架', 'cancelled': '已取消',
+                 'rejected': '已拒绝', 'timed_out': '已超时'}
 
 
 def validate_product(form, *, partial=False):
@@ -69,7 +74,7 @@ def check_status(record, expected):
         abort(409, '当前状态不允许此操作，请刷新页面')
 
 
-def create_app(data_path=None):
+def create_app(data_path=None, *, notification_worker=True):
     """Create an independent application; tests may supply an isolated JSON path."""
     application = Flask(__name__)
     application.config.update(
@@ -78,7 +83,12 @@ def create_app(data_path=None):
         SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
         MAX_CONTENT_LENGTH=26 * 1024 * 1024,
         CLOCK=lambda: datetime.now(timezone.utc),
+        NOTIFICATION_CLOCK=lambda: datetime.now(timezone.utc),
+        NOTIFICATION_WORKER=notification_worker,
     )
+
+    register_failure_logging(application)
+    register_log_routes(application)
 
     application.config['UPLOAD_DIR'] = os.environ.get('MARKET_UPLOAD_DIR') or str(
         Path(application.config['DATA_PATH']).with_name('uploads'))
@@ -126,6 +136,9 @@ def create_app(data_path=None):
     register_trade_routes(application)
     register_contact_routes(application)
     register_image_routes(application)
+    register_termination_routes(application)
+    register_moderation_routes(application)
+    register_notification_routes(application)
     return application
 
 
@@ -150,7 +163,7 @@ def register_review_routes(application):
             abort(400, '驳回须填写1–500字原因')
         with transaction(application.config['DATA_PATH']) as data:
             product = find_record(data['products'], product_id)
-            if product['status'] != 'pending':
+            if product['status'] != 'pending' or product.get('violation_active'):
                 abort(409, '该商品已处理，请刷新列表')
             expected = request.form.get('expected_version', '')
             if not expected.isascii() or not expected.isdecimal() or len(expected) > 10:
@@ -221,7 +234,8 @@ def has_active_reservation(data, product_id):
 def check_editable(data, product):
     """Only the owner may edit permitted products without an active reservation."""
     check_owner(product['seller'])
-    if (product['status'] not in ('draft', 'approved', 'off_shelf')
+    if (product.get('violation_active')
+            or product['status'] not in ('draft', 'approved', 'off_shelf')
             or has_active_reservation(data, product['id'])):
         abort(409, '当前商品不能编辑')
 
@@ -244,6 +258,7 @@ def register_product_routes(application):
                   transaction(application.config['DATA_PATH']) as data):
                 product = find_record(data['products'], product_id)
                 check_editable(data, product)
+                check_version(product)
                 action = request.form.get('action')
                 if action not in ('save', 'resubmit') or (
                         product['status'] == 'approved' and action != 'resubmit'):
@@ -270,6 +285,7 @@ def register_product_routes(application):
             product = find_record(data['products'], product_id)
             check_owner(product['seller'])
             check_status(product, 'approved')
+            check_version(product)
             if has_active_reservation(data, product_id):
                 abort(409, '存在有效预约，不能普通下架')
             product['status'] = 'off_shelf'
@@ -284,6 +300,7 @@ def register_product_routes(application):
             product = find_record(data['products'], product_id)
             check_owner(product['seller'])
             check_status(product, 'pending')
+            check_version(product)
             product['status'] = 'draft'
             product['version'] += 1
         return redirect(url_for('my_products'))
@@ -327,6 +344,7 @@ def register_trade_routes(application):
             check_status(reservation, old_status)
             product = find_record(data['products'], reservation['product_id'])
             check_status(product, 'reserved' if old_status == 'waiting' else 'confirmed')
+            check_version(product)
             now = application.config['CLOCK']()
             expired = (old_status == 'waiting' and
                        now >= datetime.fromisoformat(reservation['expires_at']))
@@ -338,6 +356,8 @@ def register_trade_routes(application):
                                      else new_status)
                 product['version'] += 1
                 reservation[new_status + '_at'] = now.isoformat()
+                if new_status == 'completed':
+                    close_on_completion(data, reservation_id, now.isoformat())
         if expired:
             abort(409, '预约已超时，商品已恢复发布')
         return redirect(url_for('my_reservations'))
@@ -371,4 +391,8 @@ def register_trade_routes(application):
 
 
 if __name__ == '__main__':
-    create_app().run(host='127.0.0.1', port=5000, debug=False)
+    app = create_app()
+    try:
+        app.run(host='127.0.0.1', port=5000, debug=False)
+    finally:
+        app.extensions['notification_worker'].stop()

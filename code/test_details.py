@@ -221,11 +221,11 @@ class ImageTest(MarketCase):
         self.login('buyer', 'buyer123')
         self.reserve(product['id'])
         self.login('user', 'user123')
-        before = self.path.read_bytes()
+        before = self.business_bytes()
         files_before = set(self.upload_dir.iterdir())
         self.assertEqual(self.client.post('/edit/' + product['id'], data=self.fields()).
                          status_code, 409)
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.business_bytes(), before)
         self.assertEqual(set(self.upload_dir.iterdir()), files_before)
 
     def test_image_limits_invalid_contents_and_cover(self):
@@ -252,12 +252,12 @@ class ImageTest(MarketCase):
     def test_json_failure_cleans_new_files_and_preserves_existing_images(self):
         """A failed JSON replacement never destroys existing referenced image files."""
         self.client.post('/submit', data=self.fields(action='save'))
-        before = self.path.read_bytes()
+        before = self.business_bytes()
         files_before = {p.name: p.read_bytes() for p in self.upload_dir.iterdir()}
         with patch('storage.os.replace', side_effect=OSError('disk failure')):
             with self.assertRaises(OSError):
                 self.client.post('/submit', data=self.fields())
-        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.business_bytes(), before)
         self.assertEqual({p.name: p.read_bytes() for p in self.upload_dir.iterdir()}, files_before)
 
     def test_legacy_images_placeholder(self):

@@ -37,6 +37,7 @@ def query_products(products, filters):
     keyword = filters.get('q', '').strip().casefold()
     category = filters.get('category', '')
     found = [item for item in products if item['status'] == 'approved'
+             and not item.get('violation_active')
              and keyword in (item['title'] + ' ' + item['description']).casefold()
              and (not category or item['category'] == category)
              and (minimum is None or Decimal(item['price']) >= minimum)
@@ -71,7 +72,8 @@ def register_catalog_routes(application):
     def public_list():
         products = load_products(application.config['DATA_PATH'])
         categories = sorted(set(CATEGORIES) | {
-            item['category'] for item in products if item['status'] == 'approved'})
+            item['category'] for item in products if item['status'] == 'approved'
+             and not item.get('violation_active')})
         try:
             found = query_products(products, request.args)
             page_products, pagination = paginate_products(found, request.args)
@@ -86,7 +88,8 @@ def register_catalog_routes(application):
     @application.get('/products/<product_id>')
     def public_detail(product_id):
         product = next((item for item in load_products(application.config['DATA_PATH'])
-                        if item['id'] == product_id and item['status'] == 'approved'), None)
+                        if item['id'] == product_id and item['status'] == 'approved'
+                        and not item.get('violation_active')), None)
         if product is None:
             abort(404)
         return render_template('products.html', heading='商品详情', products=[product], detail=True)

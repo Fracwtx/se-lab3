@@ -100,7 +100,7 @@ def register_image_routes(application):
         if product is None or filename not in product['images']:
             abort(404)
         role = current_role()
-        if product['status'] != 'approved' and not (
+        if (product['status'] != 'approved' or product.get('violation_active')) and not (
                 role == 'admin' or (role == 'user' and product['seller'] == session['username'])):
             abort(404)
         response = send_from_directory(application.config['UPLOAD_DIR'], filename,
